@@ -148,7 +148,7 @@ const TradingViewChartComponent = ({ symbol, selectedCoin, onCoinChange }: { sym
             >
               ETH
             </button>
-            <button
+          <button
               onClick={() => onCoinChange("bitcoin")}
               className={cn(
                 "px-3 py-1.5 rounded-md text-xs font-bold transition-all",
@@ -169,9 +169,9 @@ const TradingViewChartComponent = ({ symbol, selectedCoin, onCoinChange }: { sym
               )}
             >
               SOL
-            </button>
-          </div>
-
+          </button>
+      </div>
+      
           {marketData && (
             <div className="flex items-center gap-2">
               <span className={cn("text-sm font-bold", getCoinColor(selectedCoin))}>
@@ -181,14 +181,14 @@ const TradingViewChartComponent = ({ symbol, selectedCoin, onCoinChange }: { sym
                 {marketData.price_change_percentage_24h >= 0 ? '+' : ''}
                 {marketData.price_change_percentage_24h?.toFixed(2)}%
               </span>
-            </div>
+      </div>
           )}
         </div>
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
           <span className="text-xs text-green-400">Live</span>
+          </div>
         </div>
-      </div>
       
       <div className="h-[calc(100%-3rem)]">
         <div id="tradingview_chart" className="w-full h-full" />
@@ -257,7 +257,7 @@ const OrderBook = ({ symbol }: { symbol: string }) => {
             <span className="text-xs text-gray-400">
               {wsConnected ? "On-Chain" : "Offline"}
             </span>
-          </div>
+        </div>
       </div>
       
       <div className="p-4">
@@ -265,7 +265,7 @@ const OrderBook = ({ symbol }: { symbol: string }) => {
           <div className="text-center py-8">
             <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
             <div className="text-sm text-gray-400">Loading order book...</div>
-          </div>
+            </div>
         ) : (
           <>
             {/* Asks */}
@@ -316,10 +316,10 @@ const OrderBook = ({ symbol }: { symbol: string }) => {
         <div className="mt-4 p-3 bg-blue-600/10 border border-blue-500/30 rounded-lg">
           <div className="text-xs text-blue-300 font-semibold mb-1">
             Your Slab Account (On-Chain)
-          </div>
+                  </div>
           <div className="text-xs text-zinc-400 font-mono">
             79DUPoYSvfrsHTGHUZDtb98vGA5tzKUAVQyYSxsVX8fk
-          </div>
+                </div>
           <a
             href="https://explorer.solana.com/address/79DUPoYSvfrsHTGHUZDtb98vGA5tzKUAVQyYSxsVX8fk?cluster=devnet"
             target="_blank"
@@ -328,7 +328,7 @@ const OrderBook = ({ symbol }: { symbol: string }) => {
           >
             View on Explorer →
           </a>
-        </div>
+            </div>
       </div>
     </div>
   )
@@ -338,7 +338,7 @@ const OrderBook = ({ symbol }: { symbol: string }) => {
 const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "solana" }) => {
   const wallet = useWallet();
   const { publicKey, connected, signTransaction } = wallet;
-  
+
   const [tradeSide, setTradeSide] = useState<"buy" | "sell">("buy")
   const [orderType, setOrderType] = useState("Limit")
   const [price, setPrice] = useState("")
@@ -600,7 +600,7 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
   return (
     <>
       <ToastContainer toasts={toasts} onClose={closeToast} />
-      <div className="w-full h-full bg-black/20 rounded-2xl border border-[#181825] overflow-hidden">
+    <div className="w-full h-full bg-black/20 rounded-2xl border border-[#181825] overflow-hidden">
         {/* Header */}
         <div className="h-12 flex items-center justify-between px-4 border-b border-[#181825]">
           <div className="flex items-center gap-2">
@@ -614,43 +614,43 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
             <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
             <span className="text-xs text-green-400">Live</span>
           </div>
-        </div>
-        
+      </div>
+      
         <div className="p-4 space-y-4">
           {/* Buy/Sell Toggle */}
           <div className="flex bg-[#0a0a0f] rounded-lg p-1">
-            <button
+          <button
               onClick={() => setTradeSide("buy")}
-              className={cn(
+            className={cn(
                 "flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all",
                 tradeSide === "buy"
                   ? "bg-green-500/20 text-green-400 border border-green-500/50"
                   : "text-gray-500 hover:text-gray-300"
-              )}
-            >
-              Buy
-            </button>
-            <button
+            )}
+          >
+            Buy
+          </button>
+          <button
               onClick={() => setTradeSide("sell")}
-              className={cn(
+            className={cn(
                 "flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all",
                 tradeSide === "sell"
                   ? "bg-red-500/20 text-red-400 border border-red-500/50"
                   : "text-gray-500 hover:text-gray-300"
-              )}
-            >
-              Sell
-            </button>
-          </div>
+            )}
+          >
+            Sell
+          </button>
+        </div>
 
-          {/* Price Input */}
+        {/* Price Input */}
           <div className="space-y-2">
             <label className="text-xs text-gray-400 font-medium">Price (USDC)</label>
             <div className="relative">
-              <input
-                type="number"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
+            <input
+              type="number"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
                 placeholder="0.00"
                 className="w-full bg-[#0a0a0f] border border-[#181825] rounded-lg px-3 py-3 text-white placeholder-gray-500 focus:border-blue-500/50 focus:outline-none"
               />
@@ -664,21 +664,21 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
                 title={realPrice > 0 ? `Use market price: $${realPrice.toFixed(2)}` : 'Loading price...'}
               >
                 {realPrice > 0 ? `$${realPrice.toFixed(2)}` : 'Loading...'}
-              </button>
-            </div>
+            </button>
           </div>
+        </div>
 
-          {/* Quantity Input */}
+        {/* Quantity Input */}
           <div className="space-y-2">
             <label className="text-xs text-gray-400 font-medium">Amount ({selectedCoin.toUpperCase()})</label>
-            <input
-              type="number"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
+          <input
+            type="number"
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
               placeholder="0.00"
               className="w-full bg-[#0a0a0f] border border-[#181825] rounded-lg px-3 py-3 text-white placeholder-gray-500 focus:border-blue-500/50 focus:outline-none"
-            />
-          </div>
+          />
+        </div>
 
           {/* Order Type */}
           <div className="space-y-2">
@@ -691,13 +691,13 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
               <option value="Limit">Limit Order</option>
               <option value="Market">Market Order</option>
             </select>
-          </div>
+        </div>
 
-          {/* Submit Button */}
-          <button
+        {/* Submit Button */}
+        <button
             onClick={handleSubmitTrade}
             disabled={submitting || !connected || !price || !quantity}
-            className={cn(
+          className={cn(
               "w-full py-4 rounded-lg font-bold text-sm transition-all",
               tradeSide === "buy"
                 ? "bg-green-500/20 text-green-400 border border-green-500/50 hover:bg-green-500/30"
@@ -709,7 +709,7 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
               <div className="flex items-center justify-center gap-2">
                 <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
                 Processing...
-              </div>
+          </div>
             ) : !connected ? (
               "Connect Wallet"
             ) : !lastHoldId ? (
@@ -717,7 +717,7 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
             ) : (
               `Commit ${tradeSide === "buy" ? "Buy" : "Sell"} Order`
             )}
-          </button>
+            </button>
 
           {/* Wallet Info */}
           {connected && publicKey && (
@@ -725,11 +725,11 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
               <div className="text-xs text-gray-400 font-medium">Wallet</div>
               <div className="text-xs text-gray-300 font-mono">
                 {publicKey.toBase58().slice(0, 8)}...{publicKey.toBase58().slice(-8)}
-              </div>
             </div>
+          </div>
           )}
-        </div>
-      </div>
+            </div>
+            </div>
     </>
   );
 };
@@ -743,16 +743,16 @@ const CrossSlabTrader = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin
           <h3 className="text-white font-semibold text-lg">Cross-Slab Router</h3>
           <span className="text-gray-500">·</span>
           <span className="text-sm text-purple-400">Advanced</span>
+          </div>
         </div>
-      </div>
-      
+
       <div className="p-4 flex items-center justify-center h-[calc(100%-3rem)]">
-        <div className="text-center">
+          <div className="text-center">
           <div className="text-purple-400 mb-2">⚡ Cross-Slab Router</div>
           <div className="text-xs text-gray-500">Advanced routing coming soon</div>
-        </div>
-      </div>
-    </div>
+            </div>
+          </div>
+              </div>
   );
 };
 

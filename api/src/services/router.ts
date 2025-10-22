@@ -70,11 +70,9 @@ export function buildDepositInstruction(params: {
   // Derive portfolio PDA
   const [portfolioPDA, bump] = derivePortfolioPDA(userAuthority);
 
-  // For SOL deposits, we'll use a vault PDA
-  // Derive vault PDA (using "vault" + "SOL" as seeds)
-  const [vaultPDA] = PublicKey.findProgramAddressSync(
-    [Buffer.from('vault'), Buffer.from('SOL')],
-    ROUTER_PROGRAM_ID
+  // Use the Vault account created during Router initialization
+  const VAULT_ACCOUNT = new PublicKey(
+    process.env.ROUTER_VAULT_ACCOUNT || 'EBpPx3bNvRwnvrfeF34KiRm33mBWwaCGtNDycJLKdWxg'
   );
 
   // Mock USDC mint for devnet (using native SOL for now)
@@ -99,15 +97,14 @@ export function buildDepositInstruction(params: {
 
   // Build accounts array per Router program expectation:
   // 0. Vault account (writable)
-  // 1. User token account (writable) - for SOL, this is the user's wallet
+  // 1. User token account (writable) - the user's SOL wallet
   // 2. User portfolio account (writable)
   // 3. User authority (signer)
-  // NOTE: Solana deduplicates accounts, so we need to merge user wallet permissions
   const keys = [
-    { pubkey: vaultPDA, isSigner: false, isWritable: true }, // Vault
-    { pubkey: portfolioPDA, isSigner: false, isWritable: true }, // Portfolio
-    { pubkey: userAuthority, isSigner: true, isWritable: true }, // User authority (combined as both token account and signer)
-    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // System program for account creation
+    { pubkey: VAULT_ACCOUNT, isSigner: false, isWritable: true }, // 0: Vault
+    { pubkey: userAuthority, isSigner: false, isWritable: true }, // 1: User token account (their wallet holds SOL)
+    { pubkey: portfolioPDA, isSigner: false, isWritable: true }, // 2: Portfolio
+    { pubkey: userAuthority, isSigner: true, isWritable: false }, // 3: User authority (signer)
   ];
 
   return new TransactionInstruction({
