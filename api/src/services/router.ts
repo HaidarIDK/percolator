@@ -59,39 +59,54 @@ export function derivePortfolioPDA(
 
 /**
  * Build a Deposit instruction
- * Deposits SOL collateral into user's Router portfolio
+ * Deposits SOL/USDC collateral into user's Router portfolio
  */
 export function buildDepositInstruction(params: {
   userAuthority: PublicKey;
-  amount: number; // In lamports
+  amount: number; // In lamports or smallest token units
 }): TransactionInstruction {
   const { userAuthority, amount } = params;
 
   // Derive portfolio PDA
   const [portfolioPDA, bump] = derivePortfolioPDA(userAuthority);
 
+  // For SOL deposits, we'll use a vault PDA
+  // Derive vault PDA (using "vault" + "SOL" as seeds)
+  const [vaultPDA] = PublicKey.findProgramAddressSync(
+    [Buffer.from('vault'), Buffer.from('SOL')],
+    ROUTER_PROGRAM_ID
+  );
+
+  // Mock USDC mint for devnet (using native SOL for now)
+  const SOL_MINT = PublicKey.default; // Will use native SOL
+
   // Build instruction data
-  // Format: [discriminator(1), amount(8), bump(1)]
-  const data = Buffer.alloc(10);
+  // Format: [discriminator(1), mint(32), amount(16)]
+  const data = Buffer.alloc(49);
   let offset = 0;
 
   // Discriminator
   data.writeUInt8(RouterInstruction.Deposit, offset);
   offset += 1;
 
-  // Amount (in lamports)
+  // Mint (32 bytes) - using default pubkey for SOL
+  SOL_MINT.toBuffer().copy(data, offset);
+  offset += 32;
+
+  // Amount (u128 - 16 bytes)
   const amountBN = new BN(amount);
-  amountBN.toArrayLike(Buffer, 'le', 8).copy(data, offset);
-  offset += 8;
+  amountBN.toArrayLike(Buffer, 'le', 16).copy(data, offset);
 
-  // Bump seed
-  data.writeUInt8(bump, offset);
-
-  // Build accounts array
+  // Build accounts array per Router program expectation:
+  // 0. Vault account (writable)
+  // 1. User token account (writable) - for SOL, this is the user's wallet
+  // 2. User portfolio account (writable)
+  // 3. User authority (signer)
   const keys = [
-    { pubkey: portfolioPDA, isSigner: false, isWritable: true }, // Portfolio account (will be created if doesn't exist)
-    { pubkey: userAuthority, isSigner: true, isWritable: true }, // User (pays SOL)
-    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // System program for account creation
+    { pubkey: vaultPDA, isSigner: false, isWritable: true }, // Vault
+    { pubkey: userAuthority, isSigner: false, isWritable: true }, // User token/SOL account
+    { pubkey: portfolioPDA, isSigner: false, isWritable: true }, // Portfolio
+    { pubkey: userAuthority, isSigner: true, isWritable: false }, // User authority
   ];
 
   return new TransactionInstruction({
