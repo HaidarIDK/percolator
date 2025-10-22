@@ -396,6 +396,64 @@ dashboardRouter.get('/:symbol/candles', (req, res) => {
 });
 
 /**
+ * GET /api/dashboard/:coin (ethereum, bitcoin, solana)
+ * Returns CoinGecko format for frontend chart
+ */
+dashboardRouter.get('/ethereum', (req, res) => {
+  if (!ethData) {
+    return res.status(503).json({ error: 'ETH market data not yet available' });
+  }
+  res.json({
+    current_price: ethData.price,
+    price_change_24h: ethData.priceChange24h,
+    price_change_percentage_24h: ethData.priceChangePercent24h,
+    total_volume: ethData.volume24h,
+    market_cap: ethData.marketCap,
+    high_24h: ethData.high24h,
+    low_24h: ethData.low24h,
+    circulating_supply: ethData.circulatingSupply,
+    ath: ethData.ath,
+    atl: ethData.atl
+  });
+});
+
+dashboardRouter.get('/bitcoin', (req, res) => {
+  if (!btcData) {
+    return res.status(503).json({ error: 'BTC market data not yet available' });
+  }
+  res.json({
+    current_price: btcData.price,
+    price_change_24h: btcData.priceChange24h,
+    price_change_percentage_24h: btcData.priceChangePercent24h,
+    total_volume: btcData.volume24h,
+    market_cap: btcData.marketCap,
+    high_24h: btcData.high24h,
+    low_24h: btcData.low24h,
+    circulating_supply: btcData.circulatingSupply,
+    ath: btcData.ath,
+    atl: btcData.atl
+  });
+});
+
+dashboardRouter.get('/solana', (req, res) => {
+  if (!solData) {
+    return res.status(503).json({ error: 'SOL market data not yet available' });
+  }
+  res.json({
+    current_price: solData.price,
+    price_change_24h: solData.priceChange24h,
+    price_change_percentage_24h: solData.priceChangePercent24h,
+    total_volume: solData.volume24h,
+    market_cap: solData.marketCap,
+    high_24h: solData.high24h,
+    low_24h: solData.low24h,
+    circulating_supply: solData.circulatingSupply,
+    ath: solData.ath,
+    atl: solData.atl
+  });
+});
+
+/**
  * GET /api/market/:symbol
  * Get market data for a specific symbol
  * NOTE: This route MUST come last because it's a wildcard

@@ -5,6 +5,7 @@ import { marketDataRouter } from './routes/marketData';
 import { dashboardRouter } from './routes/dashboard';
 import { tradingRouter } from './routes/trading';
 import { userRouter } from './routes/user';
+import { slabRouter } from './routes/slab';
 import { healthRouter } from './routes/health';
 import { routerRouter } from './routes/router';
 import { claimsRouter } from './routes/claims';
@@ -20,7 +21,28 @@ const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
 // Middleware
-app.use(cors());
+// CORS - Allow frontend from both local and production
+const allowedOrigins = [
+  'http://localhost:3001',
+  'http://localhost:3000',
+  process.env.FRONTEND_URL, // Production frontend URL
+  'https://percolator-frontend.onrender.com', // Default Render URL
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.some(allowed => allowed && origin.startsWith(allowed))) {
+      callback(null, true);
+    } else {
+      console.warn(`⚠️  CORS blocked request from: ${origin}`);
+      callback(null, true); // Allow in development, can change to false in strict production
+    }
+  },
+  credentials: true
+}));
 app.use(express.json());
 
 // Request logging
@@ -53,7 +75,9 @@ app.get('/', (req, res) => {
 // Routes
 app.use('/api/health', healthRouter);
 app.use('/api/market', dashboardRouter); // Dashboard API with real-time data
+app.use('/api/dashboard', dashboardRouter); // Also expose under /api/dashboard for frontend
 app.use('/api/slab', marketDataRouter); // Original Solana slab data
+app.use('/api/slab-live', slabRouter); // LIVE on-chain Slab account data
 app.use('/api/trade', tradingRouter);
 app.use('/api/user', userRouter);
 app.use('/api/router', routerRouter);
