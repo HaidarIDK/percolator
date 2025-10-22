@@ -1,32 +1,93 @@
 import { Router } from 'express';
-import { PublicKey } from '@solana/web3.js';
+import { PublicKey, Transaction, Connection, clusterApiUrl } from '@solana/web3.js';
+import { 
+  buildDepositInstruction,
+  buildWithdrawInstruction,
+  buildExecuteCrossSlabInstruction,
+  derivePortfolioPDA,
+  getPortfolio,
+  ROUTER_PROGRAM_ID,
+  SLAB_ACCOUNT
+} from '../services/router';
+import { getConnection } from '../services/solana';
+import { serializeTransaction } from '../services/transactions';
 
 export const routerRouter = Router();
 
 /**
  * POST /api/router/deposit
- * Deposit collateral to router vault
+ * Deposit SOL collateral to Router portfolio
+ * Returns an unsigned transaction for the user to sign
  */
 routerRouter.post('/deposit', async (req, res) => {
   try {
-    const { user, mint, amount } = req.body;
+    const { wallet, amount } = req.body;
     
-    if (!user || !mint || !amount) {
-      return res.status(400).json({ error: 'user, mint, and amount required' });
+    if (!wallet || !amount) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Missing required fields: wallet, amount' 
+      });
     }
 
-    // TODO: Build and send deposit transaction
+    // Parse user public key
+    let userPubkey: PublicKey;
+    try {
+      userPubkey = new PublicKey(wallet);
+    } catch (error) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Invalid wallet address' 
+      });
+    }
+
+    // Convert amount to lamports (1 SOL = 1e9 lamports)
+    const amountLamports = Math.floor(parseFloat(amount) * 1e9);
+
+    console.log(`💰 Building deposit transaction for ${wallet}`);
+    console.log(`   Amount: ${amount} SOL (${amountLamports} lamports)`);
+
+    // Build deposit instruction
+    const depositIx = buildDepositInstruction({
+      userAuthority: userPubkey,
+      amount: amountLamports,
+    });
+
+    // Create transaction
+    const transaction = new Transaction();
+    transaction.add(depositIx);
+
+    // Get recent blockhash
+    const connection = getConnection();
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
+    transaction.recentBlockhash = blockhash;
+    transaction.lastValidBlockHeight = lastValidBlockHeight;
+    transaction.feePayer = userPubkey;
+
+    // Serialize for frontend
+    const serializedTx = serializeTransaction(transaction);
+
+    // Get portfolio info
+    const [portfolioPDA] = derivePortfolioPDA(userPubkey);
+
+    console.log(`✅ Deposit transaction built`);
+    console.log(`   Portfolio PDA: ${portfolioPDA.toBase58()}`);
+
     res.json({
       success: true,
-      user,
-      mint,
+      needsSigning: true,
+      transaction: serializedTx,
+      portfolioAddress: portfolioPDA.toBase58(),
       amount: parseFloat(amount),
-      vault_balance: parseFloat(amount) + 10000,
-      timestamp: Date.now(),
-      signature: 'MockDepositSignature' + Math.random().toString(36).substring(7),
+      amountLamports,
+      message: 'Sign this transaction to deposit SOL collateral into your trading portfolio',
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error('❌ Deposit error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message 
+    });
   }
 });
 
@@ -58,42 +119,75 @@ routerRouter.post('/withdraw', async (req, res) => {
 });
 
 /**
- * GET /api/router/portfolio
- * Get cross-slab portfolio for user
+ * GET /api/router/portfolio/:wallet
+ * Get cross-slab portfolio for user from Router program
  */
-routerRouter.get('/portfolio/:user', async (req, res) => {
+routerRouter.get('/portfolio/:wallet', async (req, res) => {
   try {
-    const { user } = req.params;
+    const { wallet } = req.params;
     
-    if (!user) {
-      return res.status(400).json({ error: 'user address required' });
+    if (!wallet) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'wallet address required' 
+      });
     }
 
-    // TODO: Fetch portfolio from router state
+    // Parse wallet address
+    let userPubkey: PublicKey;
+    try {
+      userPubkey = new PublicKey(wallet);
+    } catch (error) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Invalid wallet address' 
+      });
+    }
+
+    console.log(`📊 Fetching portfolio for ${wallet}`);
+
+    // Get portfolio from Router program
+    const connection = getConnection();
+    const portfolio = await getPortfolio(connection, userPubkey);
+
+    if (!portfolio || !portfolio.exists) {
+      console.log(`   Portfolio doesn't exist yet`);
+      return res.json({
+        success: true,
+        exists: false,
+        wallet,
+        portfolioAddress: derivePortfolioPDA(userPubkey)[0].toBase58(),
+        message: 'Portfolio not created yet. Make a deposit to create your portfolio.',
+        equity: 0,
+        collateral: 0,
+        positions: [],
+      });
+    }
+
+    console.log(`✅ Portfolio found: ${portfolio.address}`);
+    console.log(`   Lamports: ${portfolio.lamports}`);
+
+    // Return portfolio data
     res.json({
-      user,
-      equity: 11500.00,
-      im: 2300.00,
-      mm: 1150.00,
-      free_collateral: 9200.00,
-      leverage: 2.5,
-      positions: [
-        {
-          slab_id: 'Slab1...',
-          instrument: 0,
-          symbol: 'BTC/USDC',
-          qty: 0.5,
-          entry_price: 64500,
-          mark_price: 65000,
-          pnl: 250.00,
-        }
-      ],
-      total_collateral: 10000.00,
-      pnl_unrealized: 250.00,
-      pnl_realized: 1250.00,
+      success: true,
+      exists: true,
+      wallet,
+      portfolioAddress: portfolio.address,
+      equity: portfolio.lamports / 1e9, // Convert to SOL
+      collateral: portfolio.lamports / 1e9,
+      im: 0, // TODO: Calculate from positions
+      mm: 0,
+      free_collateral: portfolio.lamports / 1e9,
+      positions: [], // TODO: Parse position data
+      leverage: 1.0,
+      health: 100,
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error('❌ Portfolio fetch error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message 
+    });
   }
 });
 
@@ -255,107 +349,82 @@ routerRouter.post('/commit-multi', async (req, res) => {
  * 2. Backend/SDK builds ExecuteCrossSlab instruction
  * 3. Returns serialized transaction
  * 4. Frontend signs and submits → Router Program
- * 5. Router Program CPIs to multiple Slab Programs
+ * 5. Router Program CPIs to Slab Program
  * 6. Portfolio updated with net exposure
  */
 routerRouter.post('/execute-cross-slab', async (req, res) => {
   try {
-    const { wallet, slabs, side, instrumentIdx, totalQuantity, limitPrice } = req.body;
+    const { wallet, side, instrumentIdx, quantity, limitPrice } = req.body;
     
-    if (!wallet || !slabs || !side || totalQuantity === undefined) {
+    if (!wallet || !side || quantity === undefined) {
       return res.status(400).json({ 
         success: false,
-        error: 'Missing required fields: wallet, slabs, side, totalQuantity' 
+        error: 'Missing required fields: wallet, side, quantity' 
       });
     }
 
-    // Generate route ID for this cross-slab trade
-    const routeId = Date.now();
+    // Parse user public key
+    let userPubkey: PublicKey;
+    try {
+      userPubkey = new PublicKey(wallet);
+    } catch (error) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Invalid wallet address' 
+      });
+    }
 
-    console.log('🔧 SDK: Building ExecuteCrossSlab instruction');
-    console.log(`   Route ID: ${routeId}`);
-    console.log(`   User: ${wallet}`);
-    console.log(`   Slabs: ${slabs.length}`);
-    console.log(`   Total Qty: ${totalQuantity}`);
+    console.log(`🎯 Building ExecuteCrossSlab transaction for ${wallet}`);
     console.log(`   Side: ${side}`);
+    console.log(`   Quantity: ${quantity}`);
+    console.log(`   Price: ${limitPrice}`);
+    console.log(`   Instrument: ${instrumentIdx || 0}`);
 
-    // TODO: Use actual Percolator SDK to build transaction
-    // For now, return mock transaction structure that demonstrates the flow
-    
-    // This transaction would contain:
-    // 1. ComputeBudget instructions
-    // 2. ExecuteCrossSlab instruction with:
-    //    - Router program as target
-    //    - Multiple slab accounts
-    //    - User portfolio account
-    //    - Instruction data with route parameters
-    
-    const mockTransaction = Buffer.from(
-      JSON.stringify({
-        instructions: [
-          {
-            programId: 'ComputeBudget111111111111111111111111111111',
-            type: 'SetComputeUnitLimit',
-            data: { units: 400000 }
-          },
-          {
-            programId: 'RouterProgram11111111111111111111111111111',
-            type: 'ExecuteCrossSlab',
-            accounts: [
-              { name: 'router_state', writable: true },
-              { name: 'user_portfolio', writable: true },
-              ...slabs.map((s: any, i: number) => ({
-                name: `slab_${i}`,
-                pubkey: s.slabId,
-                writable: true
-              })),
-              { name: 'user', signer: true, pubkey: wallet }
-            ],
-            data: {
-              route_id: routeId,
-              instrument_idx: instrumentIdx || 0,
-              side: side === 'buy' ? 0 : 1,
-              total_qty: totalQuantity,
-              limit_px: limitPrice,
-              slab_allocations: slabs.map((s: any) => ({
-                slab_id: s.slabId,
-                qty: s.quantity,
-                price: s.price
-              }))
-            }
-          }
-        ]
-      })
-    ).toString('base64');
+    // Build execute instruction
+    const executeIx = buildExecuteCrossSlabInstruction({
+      userAuthority: userPubkey,
+      slabAccount: SLAB_ACCOUNT,
+      instrumentIdx: instrumentIdx || 0,
+      side,
+      quantity: parseFloat(quantity),
+      limitPrice: parseFloat(limitPrice),
+    });
 
-    console.log('✅ SDK: ExecuteCrossSlab transaction built');
-    console.log('   This transaction will:');
-    console.log('   1. Call Router Program');
-    console.log('   2. Router CPIs to each Slab Program');
-    console.log('   3. Each slab executes CommitFill');
-    console.log('   4. Router aggregates results');
-    console.log('   5. Portfolio updated with net exposure');
+    // Create transaction
+    const transaction = new Transaction();
+    transaction.add(executeIx);
+
+    // Get recent blockhash
+    const connection = getConnection();
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
+    transaction.recentBlockhash = blockhash;
+    transaction.lastValidBlockHeight = lastValidBlockHeight;
+    transaction.feePayer = userPubkey;
+
+    // Serialize for frontend
+    const serializedTx = serializeTransaction(transaction);
+
+    const [portfolioPDA] = derivePortfolioPDA(userPubkey);
+
+    console.log(`✅ ExecuteCrossSlab transaction built`);
+    console.log(`   Portfolio: ${portfolioPDA.toBase58()}`);
+    console.log(`   Slab: ${SLAB_ACCOUNT.toBase58()}`);
 
     res.json({
       success: true,
-      routeId,
-      transaction: mockTransaction,
-      architecture: {
-        step1: 'Frontend called SDK',
-        step2: 'SDK built ExecuteCrossSlab instruction',
-        step3: 'Router Program will process (after signing)',
-        step4: 'Router CPIs to Slab Programs',
-        step5: 'Portfolio updated with net positions'
-      },
-      slabs: slabs.map((s: any) => ({
-        slabId: s.slabId,
-        quantity: s.quantity,
-        price: s.price
-      })),
+      needsSigning: true,
+      transaction: serializedTx,
+      portfolioAddress: portfolioPDA.toBase58(),
+      slabAccount: SLAB_ACCOUNT.toBase58(),
+      routeId: Date.now(),
+      side,
+      quantity: parseFloat(quantity),
+      limitPrice: parseFloat(limitPrice),
       estimatedFees: {
-        protocol: totalQuantity * limitPrice * 0.0002, // 0.02%
+        protocol: parseFloat(quantity) * parseFloat(limitPrice) * 0.0002, // 0.02%
         network: 0.000005 // SOL
-      }
+      },
+      message: `Sign to execute ${side} order via Router → Slab CPI`,
     });
   } catch (error: any) {
     console.error('❌ SDK Error:', error);
