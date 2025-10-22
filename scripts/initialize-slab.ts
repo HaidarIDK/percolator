@@ -20,10 +20,10 @@ import * as fs from 'fs';
 const SLAB_PROGRAM_ID = new PublicKey('6EF2acRfPejnxXYd9apKc2wb3p2NLG8rKgWbCfp5G7Uz');
 const ROUTER_PROGRAM_ID = new PublicKey('9CQWTSDobkHqWzvx4nufdke4C8GKuoaqiNBBLEYFoHoG');
 
-// Slab state size: OPTIMIZED 128 KB (actual ~60KB)
-// Ultra-cheap: ~0.5 SOL rent instead of 73 SOL!
+// Slab state size: 512 KB to be safe
+// Cheap: ~3.5 SOL rent instead of 73 SOL!
 // Supports: 50 users, 300 orders, 100 positions, 50 reservations
-const SLAB_ACCOUNT_SIZE = 128 * 1024; // 128 KB - ULTRA-CHEAP!
+const SLAB_ACCOUNT_SIZE = 512 * 1024; // 512 KB - SAFE SIZE!
 
 async function main() {
   console.log('🚀 Percolator Slab Initialization Script\n');

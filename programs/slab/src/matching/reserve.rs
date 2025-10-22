@@ -2,6 +2,7 @@
 
 use crate::state::SlabState;
 use percolator_common::*;
+use pinocchio::pubkey::Pubkey;
 
 /// Reserve result
 pub struct ReserveResult {
@@ -26,6 +27,24 @@ pub fn reserve(
     commitment_hash: [u8; 32],
     route_id: u64,
 ) -> Result<ReserveResult, PercolatorError> {
+    // AUTO-CREATE ACCOUNT: If account doesn't exist at this index, initialize it
+    // This allows users to start trading without separate account initialization
+    if (account_idx as usize) < MAX_ACCOUNTS {
+        if !slab.accounts[account_idx as usize].active {
+            // Account doesn't exist - create it!
+            slab.accounts[account_idx as usize] = AccountState {
+                key: Pubkey::default(), // Will be set by caller if needed
+                cash: 0,
+                im: 0,
+                mm: 0,
+                position_head: u32::MAX, // Null pointer for position list
+                index: account_idx,
+                active: true,
+                _padding: [0; 7],
+            };
+        }
+    }
+    
     // Validate instrument and get needed values
     let (tick, lot, contract_size, index_price, freeze_until_ms) = {
         let instrument = slab

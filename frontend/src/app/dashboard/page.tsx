@@ -1,403 +1,308 @@
-"use client"
+"use client";
 
-import { Particles } from "@/components/ui/particles"
-import { AuroraText } from "@/components/ui/aurora-text"
-import { motion } from "motion/react"
-import { cn } from "@/lib/utils"
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  BarChart3, 
-  PieChart, 
-  ArrowUpRight, 
-  ArrowDownRight,
-  ChevronDown,
-  Settings,
-  Wallet,
-  DollarSign,
-  Activity,
-  Users,
-  Zap,
-  Shield,
-  Target,
-  Eye,
-  EyeOff
-} from "lucide-react"
-import { useState, useEffect, useRef, memo } from "react"
-import { useWallet, useConnection } from "@solana/wallet-adapter-react"
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui"
-import { Transaction, Connection, clusterApiUrl } from "@solana/web3.js"
-import { Buffer } from "buffer"
-import { CustomChart, TimeframeSelector } from "@/components/ui/custom-chart"
-import { CustomDataService } from "@/lib/data-service"
-import { apiClient, type MarketData, type Orderbook, type OrderbookLevel } from "@/lib/api-client"
-import Link from "next/link"
-import { ToastContainer } from "@/components/ui/toast"
+import React, { useState, useEffect } from 'react';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { Connection, Transaction, clusterApiUrl } from '@solana/web3.js';
+import { cn } from '@/lib/utils';
+import { Target, Zap, Activity, TrendingUp, TrendingDown } from 'lucide-react';
+import Link from 'next/link';
 
-// Chart Widget Component using TradingView - Simplified
-function CoinGeckoWidget({ coinId }: { coinId: "ethereum" | "bitcoin" | "solana" }) {
-  const container = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!container.current) return;
-    
-    // Clear previous content
-    container.current.innerHTML = '';
-    
-    const getSymbol = () => {
-      switch(coinId) {
-        case "ethereum": return "BINANCE:ETHUSDT";
-        case "bitcoin": return "BINANCE:BTCUSDT";
-        case "solana": return "BINANCE:SOLUSDT";
-        default: return "BINANCE:ETHUSDT";
-      }
-    };
-    
-    const widgetContainer = document.createElement("div");
-    widgetContainer.className = "tradingview-widget-container__widget";
-    widgetContainer.style.height = "100%";
-    widgetContainer.style.width = "100%";
-    
-    const script = document.createElement("script");
-    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
-    script.type = "text/javascript";
-    script.async = true;
-    script.innerHTML = JSON.stringify({
-      autosize: true,
-      symbol: getSymbol(),
-      interval: "1",
-      timezone: "Etc/UTC",
-      theme: "dark",
-      style: "1",
-      locale: "en",
-      enable_publishing: false,
-      backgroundColor: "rgba(0, 0, 0, 0.1)",
-      hide_top_toolbar: false,
-      hide_legend: false,
-      save_image: false,
-      support_host: "https://www.tradingview.com"
-    });
-    
-    script.onerror = () => {
-      // Silently handle script loading errors
-    };
-    
-    widgetContainer.appendChild(script);
-    container.current.appendChild(widgetContainer);
-  }, [coinId]);
-
+// Toast Container Component
+const ToastContainer = ({ toasts, onClose }: { toasts: Array<{ id: string; message: string; type: 'success' | 'error' | 'warning' | 'info' }>, onClose: (id: string) => void }) => {
   return (
-    <div ref={container} style={{ height: "100%", width: "100%" }}>
+    <div className="fixed top-4 right-4 z-50 space-y-2">
+      {toasts.map((toast) => (
+        <div
+          key={toast.id}
+          className={cn(
+            "px-4 py-3 rounded-lg shadow-lg max-w-sm",
+            toast.type === 'success' && "bg-green-500/20 border border-green-500/50 text-green-400",
+            toast.type === 'error' && "bg-red-500/20 border border-red-500/50 text-red-400",
+            toast.type === 'warning' && "bg-yellow-500/20 border border-yellow-500/50 text-yellow-400",
+            toast.type === 'info' && "bg-blue-500/20 border border-blue-500/50 text-blue-400"
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium whitespace-pre-line">{toast.message}</span>
+            <button
+              onClick={() => onClose(toast.id)}
+              className="ml-2 text-gray-400 hover:text-white"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      ))}
     </div>
   );
-}
+};
 
-const CoinGeckoWidgetMemo = memo(CoinGeckoWidget);
+// TradingView Chart Component with Real Data
+const TradingViewChartComponent = ({ symbol, selectedCoin, onCoinChange }: { symbol: string, selectedCoin: "ethereum" | "bitcoin" | "solana", onCoinChange: (coin: "ethereum" | "bitcoin" | "solana") => void }) => {
+  const [mounted, setMounted] = useState(false);
+  const [marketData, setMarketData] = useState<any>(null);
 
-// Chart Component with CoinGecko
-const TradingViewChartComponent = ({ 
-  symbol = "ETH-PERP",
-  selectedCoin,
-  onCoinChange
-}: { 
-  symbol?: string;
-  selectedCoin: "ethereum" | "bitcoin" | "solana";
-  onCoinChange: (coin: "ethereum" | "bitcoin" | "solana") => void;
-}) => {
-  const [isFullscreen, setIsFullscreen] = useState(false)
-  const [selectedTimeframe, setSelectedTimeframe] = useState<"15" | "1" | "3" | "5" | "30" | "60" | "240" | "120" | "180" | "D" | "W">("15")
-  const [chartData, setChartData] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [ohlcData, setOhlcData] = useState({ open: 0, high: 0, low: 0, close: 0, change: 0 })
-
-  // Fetch real chart data from backend
   useEffect(() => {
-    const fetchChartData = async () => {
+    setMounted(true);
+  }, []);
+
+  // Fetch real-time market data from backend
+  useEffect(() => {
+    const fetchMarketData = async () => {
       try {
-        setLoading(true)
-        const data = await apiClient.getChartData(symbol, selectedTimeframe, 100)
-        setChartData(data)
-        
-        // Update OHLC display
-        if (data.length > 0) {
-          const latest = data[data.length - 1]
-          const first = data[0]
-          const high = Math.max(...data.map(d => d.high))
-          const low = Math.min(...data.map(d => d.low))
-          const change = latest.close - first.open
-          
-          setOhlcData({
-            open: first.open,
-            high,
-            low,
-            close: latest.close,
-            change
-          })
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+        const response = await fetch(`${API_URL}/api/dashboard/${selectedCoin}`);
+        const data = await response.json();
+        if (data) {
+          setMarketData(data);
         }
-        setLoading(false)
       } catch (error) {
-        console.error('Failed to fetch chart data:', error)
-        // Fallback to sample data
-        const sampleData = CustomDataService.generateSampleData(50)
-        setChartData(sampleData)
-        setLoading(false)
+        console.error('Failed to fetch market data:', error);
       }
-    }
+    };
 
-    fetchChartData()
+    fetchMarketData();
+    const interval = setInterval(fetchMarketData, 10000); // Update every 10 seconds
+    return () => clearInterval(interval);
+  }, [selectedCoin]);
 
-    // Subscribe to real-time candle updates
-    const cleanup = apiClient.connectWebSocket((message: any) => {
-      if (message.type === 'candle' && message.symbol === symbol) {
-        setChartData(prev => [...prev.slice(-99), message.data])
+  useEffect(() => {
+    if (!mounted) return;
+
+    // Map coin to TradingView symbol
+    const getTradingViewSymbol = () => {
+      switch(selectedCoin) {
+        case "ethereum": return "COINBASE:ETHUSD";
+        case "bitcoin": return "COINBASE:BTCUSD";
+        case "solana": return "COINBASE:SOLUSD";
       }
-    })
+    };
 
-    apiClient.subscribeToMarket(symbol)
-
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchChartData, 30000)
+    const script = document.createElement('script');
+    script.src = 'https://s3.tradingview.com/tv.js';
+    script.async = true;
+    script.onload = () => {
+      if (typeof (window as any).TradingView !== 'undefined') {
+        new (window as any).TradingView.widget({
+          autosize: true,
+          symbol: getTradingViewSymbol(),
+          interval: '15',
+          timezone: 'Etc/UTC',
+          theme: 'dark',
+          style: '1',
+          locale: 'en',
+          toolbar_bg: '#0a0a0f',
+          enable_publishing: false,
+          hide_top_toolbar: false,
+          hide_legend: true,
+          save_image: false,
+          container_id: 'tradingview_chart',
+          backgroundColor: '#0a0a0f',
+          gridColor: '#181825',
+          studies: [],
+        });
+      }
+    };
+    document.body.appendChild(script);
 
     return () => {
-      cleanup()
-      clearInterval(interval)
+      const existingScript = document.querySelector(`script[src="https://s3.tradingview.com/tv.js"]`);
+      if (existingScript) {
+        document.body.removeChild(existingScript);
+      }
+    };
+  }, [mounted, selectedCoin]);
+
+  const getPriceChangeColor = () => {
+    if (!marketData?.price_change_percentage_24h) return "text-gray-400";
+    return marketData.price_change_percentage_24h >= 0 ? "text-green-400" : "text-red-400";
+  };
+
+  const getCoinColor = (coin: "ethereum" | "bitcoin" | "solana") => {
+    switch(coin) {
+      case "ethereum": return "text-blue-400";
+      case "bitcoin": return "text-orange-400";
+      case "solana": return "text-purple-400";
     }
-  }, [symbol, selectedTimeframe])
+  };
 
-  const handleTimeframeChange = (timeframe: "15" | "1" | "3" | "5" | "30" | "60" | "240" | "120" | "180" | "D" | "W") => {
-    setSelectedTimeframe(timeframe)
-  }
-
-  const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen)
-  }
+  if (!mounted) return null;
 
   return (
-    <div className={cn(
-      "bg-black/20 rounded-2xl border border-[#181825] overflow-hidden transition-all duration-300",
-      isFullscreen 
-        ? "fixed inset-0 z-50 rounded-none" 
-        : "w-full h-full"
-    )}>
+    <div className="w-full h-full bg-black/20 rounded-2xl border border-[#181825] overflow-hidden">
       <div className="h-12 flex items-center justify-between px-4 border-b border-[#181825]">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <span className="text-white font-semibold text-sm">Price Charts</span>
-            </div>
+        <div className="flex items-center gap-3">
+          <h3 className="text-white font-semibold text-lg">Chart</h3>
           
-          {/* Coin Selection Buttons */}
-          <div className="flex bg-[#181825] rounded-lg p-0.5">
+          {/* Coin Selector Pills */}
+          <div className="flex items-center gap-2 bg-[#0a0a0f] rounded-lg p-1">
             <button
               onClick={() => onCoinChange("ethereum")}
               className={cn(
-                "px-3 py-1 text-xs font-medium rounded-md transition-colors",
-                selectedCoin === "ethereum" 
-                  ? "bg-blue-500/20 text-blue-400" 
-                  : "text-gray-400 hover:text-white"
+                "px-3 py-1.5 rounded-md text-xs font-bold transition-all",
+                selectedCoin === "ethereum"
+                  ? "bg-blue-500/20 text-blue-400 border border-blue-500/50"
+                  : "text-gray-500 hover:text-gray-300"
               )}
             >
-              ETH/USD
+              ETH
             </button>
             <button
               onClick={() => onCoinChange("bitcoin")}
               className={cn(
-                "px-3 py-1 text-xs font-medium rounded-md transition-colors",
-                selectedCoin === "bitcoin" 
-                  ? "bg-orange-500/20 text-orange-400" 
-                  : "text-gray-400 hover:text-white"
+                "px-3 py-1.5 rounded-md text-xs font-bold transition-all",
+                selectedCoin === "bitcoin"
+                  ? "bg-orange-500/20 text-orange-400 border border-orange-500/50"
+                  : "text-gray-500 hover:text-gray-300"
               )}
             >
-              BTC/USD
+              BTC
             </button>
             <button
               onClick={() => onCoinChange("solana")}
               className={cn(
-                "px-3 py-1 text-xs font-medium rounded-md transition-colors",
-                selectedCoin === "solana" 
-                  ? "bg-purple-500/20 text-purple-400" 
-                  : "text-gray-400 hover:text-white"
+                "px-3 py-1.5 rounded-md text-xs font-bold transition-all",
+                selectedCoin === "solana"
+                  ? "bg-purple-500/20 text-purple-400 border border-purple-500/50"
+                  : "text-gray-500 hover:text-gray-300"
               )}
             >
-              SOL/USD
+              SOL
             </button>
+          </div>
+
+          {marketData && (
+            <div className="flex items-center gap-2">
+              <span className={cn("text-sm font-bold", getCoinColor(selectedCoin))}>
+                ${marketData.current_price?.toLocaleString() || '0.00'}
+              </span>
+              <span className={cn("text-xs font-medium", getPriceChangeColor())}>
+                {marketData.price_change_percentage_24h >= 0 ? '+' : ''}
+                {marketData.price_change_percentage_24h?.toFixed(2)}%
+              </span>
+            </div>
+          )}
         </div>
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={toggleFullscreen}
-            className="p-2 text-gray-400 hover:text-white transition-colors"
-            title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
-          >
-            {isFullscreen ? (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-              </svg>
-            )}
-          </button>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+          <span className="text-xs text-green-400">Live</span>
         </div>
       </div>
       
-      {/* CoinGecko Chart Widget */}
-      <div className={cn(
-        "transition-all duration-300",
-        isFullscreen ? "h-[calc(100vh-48px)]" : "h-[calc(100%-48px)]"
-      )}>
-        <CoinGeckoWidgetMemo coinId={selectedCoin} />
-      </div>
-      
-      {/* Chart footer - Powered by TradingView */}
-      <div className="h-10 flex items-center justify-center px-4 border-t border-[#181825]">
-        <div className="text-xs text-gray-500">
-          Charts powered by <span className="text-gray-400">TradingView</span>
-        </div>
+      <div className="h-[calc(100%-3rem)]">
+        <div id="tradingview_chart" className="w-full h-full" />
       </div>
     </div>
-  )
-}
+  );
+};
 
-// Order Book Component
+// OrderBook Component
 const OrderBook = ({ symbol }: { symbol: string }) => {
-  const [orderbook, setOrderbook] = useState<Orderbook | null>(null)
+  const [orderbook, setOrderbook] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'orderbook' | 'trades'>('orderbook')
-  const [recentTrades, setRecentTrades] = useState<any[]>([])
   const [wsConnected, setWsConnected] = useState(false)
 
   useEffect(() => {
-    // Fetch initial orderbook
+    // Fetch LIVE orderbook from YOUR Slab account on-chain
     const fetchOrderbook = async () => {
       try {
-        const data = await apiClient.getOrderbook(symbol)
-        setOrderbook(data)
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
+        const response = await fetch(`${API_URL}/api/slab-live/orderbook`)
+        const data = await response.json()
+        
+        if (data.success) {
+          setOrderbook(data.orderbook)
+          setWsConnected(true) // Mark as connected to blockchain
+        }
         setLoading(false)
       } catch (error) {
-        console.error('Failed to fetch orderbook:', error)
+        console.error('Failed to fetch live Slab orderbook:', error)
         setLoading(false)
+        setWsConnected(false)
       }
     }
 
     fetchOrderbook()
 
-    // Subscribe to real-time orderbook updates via WebSocket
-    const cleanup = apiClient.connectWebSocket((message: any) => {
-      setWsConnected(true); // Mark as connected when we receive any message
-      if (message.type === 'orderbook' && message.symbol === symbol) {
-        setOrderbook(message.data)
-      }
-      if (message.type === 'trade' && message.symbol === symbol) {
-        setRecentTrades(prev => [message.data, ...prev].slice(0, 20))
-      }
-    }, () => {
-      // WebSocket error (silently handled)
-      setWsConnected(false);
-    })
-
-    apiClient.subscribeToOrderbook(symbol)
-
-    // Refresh every 5 seconds as fallback
+    // Refresh every 5 seconds from blockchain
     const interval = setInterval(fetchOrderbook, 5000)
 
     return () => {
-      cleanup()
       clearInterval(interval)
     }
   }, [symbol])
 
-  const asks = orderbook?.asks.slice(0, 10) || []
-  const bids = orderbook?.bids.slice(0, 10) || []
+  const asks = orderbook?.asks?.slice(0, 10) || []
+  const bids = orderbook?.bids?.slice(0, 10) || []
   const midPrice = asks.length && bids.length 
-    ? ((asks[asks.length - 1].price + bids[0].price) / 2).toFixed(2)
-    : '0.00'
+    ? ((asks[0]?.price || 0) + (bids[0]?.price || 0)) / 2 
+    : 0
 
   return (
     <div className="w-full h-full bg-black/20 rounded-2xl border border-[#181825] overflow-hidden">
       <div className="h-12 flex items-center justify-between px-4 border-b border-[#181825]">
-        <div className="flex space-x-4">
-          <button 
-            onClick={() => setActiveTab('orderbook')}
-            className={cn(
-              "font-medium transition-colors",
-              activeTab === 'orderbook' ? "text-[#B8B8FF]" : "text-gray-400 hover:text-white"
-            )}
-          >
-            Order book
-          </button>
-          
-          <button 
-            onClick={() => setActiveTab('trades')}
-            className={cn(
-              "font-medium transition-colors",
-              activeTab === 'trades' ? "text-[#B8B8FF]" : "text-gray-400 hover:text-white"
-            )}
-          >
-            Last trades
-          </button>
-          {loading && <span className="text-xs text-gray-500 ml-2">Loading...</span>}
+        <div className="flex items-center gap-2">
+          <h3 className="text-white font-semibold text-lg">Order Book</h3>
+          <span className="text-gray-500">·</span>
+          <span className="text-sm text-gray-400">{symbol}</span>
         </div>
         
-        {/* WebSocket Connection Status */}
-        <div className="flex items-center space-x-2">
-          <div className={cn(
-            "w-2 h-2 rounded-full",
-            wsConnected ? "bg-green-400" : "bg-red-400"
-          )}></div>
-          <span className="text-xs text-gray-400">
-            {wsConnected ? "Live" : "Offline"}
-          </span>
-        </div>
+          {/* WebSocket Connection Status */}
+          <div className="flex items-center space-x-2">
+            <div className={cn(
+              "w-2 h-2 rounded-full",
+              wsConnected ? "bg-green-400" : "bg-red-400"
+            )}></div>
+            <span className="text-xs text-gray-400">
+              {wsConnected ? "On-Chain" : "Offline"}
+            </span>
+          </div>
       </div>
       
       <div className="p-4">
-        {activeTab === 'orderbook' ? (
+        {loading ? (
+          <div className="text-center py-8">
+            <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+            <div className="text-sm text-gray-400">Loading order book...</div>
+          </div>
+        ) : (
           <>
-            <div className="grid grid-cols-3 gap-2 text-xs text-gray-400 mb-2">
-              <span>Price (USDC)</span>
-              <span>Qty</span>
-              <span>Total</span>
-            </div>
-            
-            {/* Asks (reverse order for display) */}
-            <div className="space-y-1 mb-4">
+            {/* Asks */}
+            <div className="space-y-1 mb-2">
+              <div className="text-xs text-gray-400 font-medium mb-2">Asks</div>
               {asks.length > 0 ? (
-                asks.reverse().map((ask, index) => (
-                  <div key={index} className="grid grid-cols-3 gap-2 text-sm relative">
-                    <div 
-                      className="absolute inset-0 bg-red-500/5 origin-left" 
-                      style={{ width: `${(ask.total / Math.max(...asks.map(a => a.total))) * 100}%` }}
-                    />
-                    <span className="text-red-400 relative z-10">{ask.price.toFixed(2)}</span>
-                    <span className="text-white relative z-10">{ask.quantity.toFixed(4)}</span>
-                    <span className="text-gray-400 relative z-10">{ask.total.toFixed(4)}</span>
+                asks.map((ask: any, index: number) => (
+                  <div key={index} className="flex justify-between text-xs">
+                    <span className="text-red-400">{ask.price?.toFixed(2) || '0.00'}</span>
+                    <span className="text-white">{ask.quantity?.toFixed(4) || '0.0000'}</span>
+                    <span className="text-gray-400">{ask.total?.toFixed(4) || '0.0000'}</span>
                   </div>
                 ))
               ) : (
-                <div className="text-gray-500 text-sm text-center py-4">No asks</div>
+                <div className="text-gray-500 text-sm text-center py-4">
+                  {(orderbook?.bids?.length === 0 && orderbook?.asks?.length === 0) 
+                    ? "Fresh pool! Place first order" 
+                    : "No asks"}
+                </div>
               )}
             </div>
             
             {/* Mark Price */}
             <div className="flex items-center justify-center py-2 border-y border-[#181825] my-2">
-              <span className="text-white font-semibold">{midPrice}</span>
+              <span className="text-white font-semibold">{midPrice.toFixed(2)}</span>
               <TrendingUp className="w-3 h-3 text-green-400 ml-2" />
             </div>
             
             {/* Bids */}
             <div className="space-y-1">
+              <div className="text-xs text-gray-400 font-medium mb-2">Bids</div>
               {bids.length > 0 ? (
-                bids.map((bid, index) => (
-                  <div key={index} className="grid grid-cols-3 gap-2 text-sm relative">
-                    <div 
-                      className="absolute inset-0 bg-green-500/5 origin-left" 
-                      style={{ width: `${(bid.total / Math.max(...bids.map(b => b.total))) * 100}%` }}
-                    />
-                    <span className="text-green-400 relative z-10">{bid.price.toFixed(2)}</span>
-                    <span className="text-white relative z-10">{bid.quantity.toFixed(4)}</span>
-                    <span className="text-gray-400 relative z-10">{bid.total.toFixed(4)}</span>
+                bids.map((bid: any, index: number) => (
+                  <div key={index} className="flex justify-between text-xs">
+                    <span className="text-green-400">{bid.price?.toFixed(2) || '0.00'}</span>
+                    <span className="text-white">{bid.quantity?.toFixed(4) || '0.0000'}</span>
+                    <span className="text-gray-400">{bid.total?.toFixed(4) || '0.0000'}</span>
                   </div>
                 ))
               ) : (
@@ -405,1139 +310,48 @@ const OrderBook = ({ symbol }: { symbol: string }) => {
               )}
             </div>
           </>
-        ) : (
-          <>
-            {/* Last Trades Tab */}
-            <div className="grid grid-cols-3 gap-2 text-xs text-gray-400 mb-2">
-              <span>Price (USDC)</span>
-              <span>Qty</span>
-              <span>Time</span>
-            </div>
-            
-            <div className="space-y-1 max-h-[600px] overflow-y-auto">
-              {recentTrades.length > 0 ? (
-                recentTrades.map((trade, index) => (
-                  <div key={index} className="grid grid-cols-3 gap-2 text-sm">
-                    <span className={trade.side === 'buy' ? "text-green-400" : "text-red-400"}>
-                      {trade.price?.toFixed(2) || '0.00'}
-                    </span>
-                    <span className="text-white">{trade.quantity?.toFixed(4) || '0.0000'}</span>
-                    <span className="text-gray-400 text-xs">
-                      {new Date(trade.timestamp || Date.now()).toLocaleTimeString()}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <div className="text-gray-500 text-sm text-center py-8">
-                  No recent trades
-                  <div className="text-xs mt-2">Waiting for live data...</div>
-                </div>
-              )}
-            </div>
-          </>
         )}
+        
+        {/* Slab Account Info */}
+        <div className="mt-4 p-3 bg-blue-600/10 border border-blue-500/30 rounded-lg">
+          <div className="text-xs text-blue-300 font-semibold mb-1">
+            Your Slab Account (On-Chain)
+          </div>
+          <div className="text-xs text-zinc-400 font-mono">
+            79DUPoYSvfrsHTGHUZDtb98vGA5tzKUAVQyYSxsVX8fk
+          </div>
+          <a
+            href="https://explorer.solana.com/address/79DUPoYSvfrsHTGHUZDtb98vGA5tzKUAVQyYSxsVX8fk?cluster=devnet"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-400 hover:text-blue-300 mt-1 inline-block"
+          >
+            View on Explorer →
+          </a>
+        </div>
       </div>
     </div>
   )
 }
 
-// Past Trades Component - Shows user's historical trades
-const PastTrades = ({ symbol }: { symbol: string }) => {
-  const [pastTrades, setPastTrades] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const wallet = useWallet();
-  const { publicKey, connected } = wallet;
-
-  useEffect(() => {
-    if (!connected || !publicKey) {
-      setLoading(false);
-      return;
-    }
-
-    // Fetch user's past trades
-    const fetchPastTrades = async () => {
-      try {
-        const walletAddress = publicKey.toBase58();
-        // TODO: Replace with actual API endpoint when available
-        // For now, show mock data
-        const mockTrades = [
-          {
-            id: '1',
-            symbol: symbol,
-            side: 'buy',
-            price: 184.50,
-            quantity: 0.5,
-            timestamp: Date.now() - 300000, // 5 minutes ago
-            status: 'filled',
-            fee: 0.02
-          },
-          {
-            id: '2', 
-            symbol: symbol,
-            side: 'sell',
-            price: 185.20,
-            quantity: 0.3,
-            timestamp: Date.now() - 600000, // 10 minutes ago
-            status: 'filled',
-            fee: 0.02
-          },
-          {
-            id: '3',
-            symbol: symbol,
-            side: 'buy',
-            price: 183.80,
-            quantity: 1.0,
-            timestamp: Date.now() - 900000, // 15 minutes ago
-            status: 'filled',
-            fee: 0.02
-          }
-        ];
-        setPastTrades(mockTrades);
-        setLoading(false);
-      } catch (error) {
-        console.error('Failed to fetch past trades:', error);
-        setLoading(false);
-      }
-    };
-
-    fetchPastTrades();
-    
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchPastTrades, 30000);
-    return () => clearInterval(interval);
-  }, [symbol, connected, publicKey]);
-
-  return (
-    <div className="w-full bg-black/20 rounded-2xl border border-[#181825] overflow-hidden">
-      <div className="h-10 flex items-center px-3 border-b border-[#181825]">
-        <h3 className="text-white font-medium text-sm">Past Trades</h3>
-        {loading && <span className="text-xs text-gray-500 ml-2">Loading...</span>}
-      </div>
-      
-      <div className="p-3">
-        {!connected ? (
-          <div className="text-center py-8">
-            <div className="text-gray-500 text-sm">Connect wallet to view trades</div>
-          </div>
-        ) : pastTrades.length > 0 ? (
-          <>
-            <div className="grid grid-cols-4 gap-2 text-xs text-gray-400 mb-2">
-              <span>Side</span>
-              <span>Price</span>
-              <span>Qty</span>
-              <span>Time</span>
-            </div>
-            
-            <div className="space-y-1 max-h-[300px] overflow-y-auto">
-              {pastTrades.map((trade, index) => (
-                <div key={trade.id} className="grid grid-cols-4 gap-2 text-sm py-1 hover:bg-[#181825]/50 rounded px-1">
-                  <span className={cn(
-                    "text-xs font-medium",
-                    trade.side === 'buy' ? "text-green-400" : "text-red-400"
-                  )}>
-                    {trade.side.toUpperCase()}
-                  </span>
-                  <span className="text-white">{trade.price.toFixed(2)}</span>
-                  <span className="text-gray-300">{trade.quantity.toFixed(4)}</span>
-                  <span className="text-gray-400 text-xs">
-                    {new Date(trade.timestamp).toLocaleTimeString()}
-                  </span>
-                </div>
-              ))}
-            </div>
-            
-            <div className="mt-3 pt-2 border-t border-[#181825]">
-              <div className="text-xs text-gray-400">
-                Total Trades: <span className="text-white">{pastTrades.length}</span>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="text-center py-8">
-            <div className="text-gray-500 text-sm">No past trades found</div>
-            <div className="text-xs text-gray-400 mt-1">Your trades will appear here</div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// Advanced Cross-Slab Trading Component
-const CrossSlabTrader = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "solana" }) => {
-  const wallet = useWallet();
-  const { publicKey, connected, signTransaction } = wallet;
-  const { connection } = useConnection();
-  
-  const [tradeSide, setTradeSide] = useState<"buy" | "sell">("buy");
-  const [quantity, setQuantity] = useState("");
-  const [limitPrice, setLimitPrice] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [slabQuotes, setSlabQuotes] = useState<any[]>([]);
-  const [selectedSlabs, setSelectedSlabs] = useState<number[]>([]);
-  const [executionPlan, setExecutionPlan] = useState<any>(null);
-  const [showAdvanced, setShowAdvanced] = useState(true); // Show details by default
-  const [showCrossSlabInfo, setShowCrossSlabInfo] = useState(false);
-  const [deploymentVersion, setDeploymentVersion] = useState<"v0" | "v1">("v0");
-
-  // Fetch available slabs from backend
-  const [availableSlabs, setAvailableSlabs] = useState<any[]>([]);
-  const [loadingSlabs, setLoadingSlabs] = useState(false);
-
-  // Fetch slabs on mount and when coin changes
-  useEffect(() => {
-    const fetchSlabs = async () => {
-      setLoadingSlabs(true);
-      try {
-        // Get market price for the selected coin
-        const getMarketPrice = () => {
-          switch(selectedCoin) {
-            case "ethereum": return 3882;   // ETH price
-            case "bitcoin": return 97500;   // BTC price
-            case "solana": return 185;      // SOL price
-            default: return 3882;
-          }
-        };
-
-        const basePrice = getMarketPrice();
-        
-        // Use SDK to fetch available slabs with coin-specific pricing
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-        const response = await fetch(`${API_URL}/api/router/slabs?coin=${selectedCoin}`);
-        const data = await response.json();
-        
-        // Update slabs with correct prices for the selected coin
-        const updatedSlabs = (data.slabs || []).map((slab: any) => ({
-          ...slab,
-          vwap: basePrice * (1 + (slab.id === 1 ? 0.00005 : slab.id === 2 ? 0.00008 : -0.00005)), // Small price variations
-        }));
-        
-        setAvailableSlabs(updatedSlabs);
-      } catch (error) {
-        console.error('Failed to fetch slabs:', error);
-        
-        // Fallback to coin-specific mock data
-        const getMarketPrice = () => {
-          switch(selectedCoin) {
-            case "ethereum": return 3882;
-            case "bitcoin": return 97500;
-            case "solana": return 185;
-            default: return 3882;
-          }
-        };
-        
-        const basePrice = getMarketPrice();
-        
-        setAvailableSlabs([
-          { id: 1, name: "Slab A", liquidity: 1500, vwap: basePrice * 1.00005, fee: 0.02 },
-          { id: 2, name: "Slab B", liquidity: 2300, vwap: basePrice * 1.00008, fee: 0.015 },
-          { id: 3, name: "Slab C", liquidity: 980, vwap: basePrice * 0.99995, fee: 0.025 },
-        ]);
-      } finally {
-        setLoadingSlabs(false);
-      }
-    };
-    fetchSlabs();
-  }, [selectedCoin]); // Re-fetch when coin changes
-
-  const getBaseCurrency = () => {
-    switch(selectedCoin) {
-      case "ethereum": return "ETH";
-      case "bitcoin": return "BTC";
-      case "solana": return "SOL";
-    }
-  };
-
-  const getQuoteCurrency = () => "USDC";
-
-  // Calculate execution plan when quantity/price changes
-  useEffect(() => {
-    if (!quantity || !limitPrice || availableSlabs.length === 0) {
-      setExecutionPlan(null);
-      return;
-    }
-
-    const qty = parseFloat(quantity);
-    const limit = parseFloat(limitPrice);
-
-    if (isNaN(qty) || isNaN(limit) || qty <= 0 || limit <= 0) {
-      setExecutionPlan(null);
-      return;
-    }
-
-    // Sort slabs by VWAP (best price first)
-    const sorted = [...availableSlabs].sort((a, b) => 
-      tradeSide === "buy" ? a.vwap - b.vwap : b.vwap - a.vwap
-    );
-
-    // Select best slabs within price limit
-    let remaining = qty;
-    const plan: any[] = [];
-    let totalCost = 0;
-    let totalFees = 0;
-
-    for (const slab of sorted) {
-      if (remaining <= 0.001) break; // Account for floating point precision
-      
-      // Check if within price limit
-      const withinLimit = tradeSide === "buy" 
-        ? slab.vwap <= limit 
-        : slab.vwap >= limit;
-      
-      if (!withinLimit) continue;
-
-      // Determine how much from this slab
-      const qtyFromSlab = Math.min(remaining, slab.liquidity);
-      const cost = qtyFromSlab * slab.vwap;
-      const fee = cost * ((slab.fee || 2) / 100); // Default 2% fee if not specified
-      
-      plan.push({
-        slabId: slab.id,
-        slabName: slab.name,
-        quantity: qtyFromSlab,
-        price: slab.vwap,
-        cost: cost,
-        fee: fee
-      });
-
-      remaining -= qtyFromSlab;
-      totalCost += cost;
-      totalFees += fee;
-    }
-
-    const filledQty = qty - remaining;
-    const avgPrice = filledQty > 0 ? totalCost / filledQty : 0;
-    const totalWithFees = totalCost + totalFees;
-
-    setExecutionPlan({
-      slabs: plan,
-      totalQuantity: filledQty,
-      totalCost: totalWithFees,
-      avgPrice: avgPrice,
-      unfilled: Math.max(0, remaining)
-    });
-
-  }, [quantity, limitPrice, tradeSide, selectedCoin, availableSlabs]);
-
-  /**
-   * ARCHITECTURE FLOW:
-   * 1. Frontend (User Interface) - This function
-   * 2. Backend/Client SDK - Calls router backend to build transaction
-   * 3. Router Program (ExecuteCrossSlab instruction) - Processes multi-slab logic
-   * 4. Multiple Slab Programs (CommitFill CPI calls) - Execute fills on each slab
-   * 5. Portfolio Update (Net Exposure Calculation) - Update user's cross-slab portfolio
-   */
-  const handleExecuteCrossSlab = async () => {
-    if (!connected || !publicKey || !signTransaction) {
-      alert('Connect wallet first');
-      return;
-    }
-
-    if (!executionPlan || executionPlan.unfilled > 0) {
-      alert('Not enough liquidity across slabs');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      console.log('🚀 STEP 1: Frontend → Client SDK');
-      console.log('Building ExecuteCrossSlab instruction...');
-      
-      // ARCHITECTURE STEP 1-2: Frontend → Client SDK
-      // Call backend SDK endpoint which will build the router instruction
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-      const sdkResponse = await fetch(`${API_URL}/api/router/execute-cross-slab`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          wallet: publicKey.toBase58(),
-          slabs: executionPlan.slabs.map((s: any) => ({
-            slabId: s.slabId,
-            quantity: s.quantity,
-            price: s.price,
-          })),
-          side: tradeSide,
-          instrumentIdx: 0, // ETH/BTC/SOL index
-          totalQuantity: executionPlan.totalQuantity,
-          limitPrice: parseFloat(limitPrice),
-        })
-      });
-
-      const sdkResult = await sdkResponse.json();
-      
-      if (!sdkResult.success || !sdkResult.transaction) {
-        alert(sdkResult.error || 'Failed to build cross-slab transaction');
-        setSubmitting(false);
-        return;
-      }
-
-      console.log('✅ STEP 2: SDK → Router Program');
-      console.log('Transaction built with ExecuteCrossSlab instruction');
-      console.log('Route ID:', sdkResult.routeId);
-      
-      // ARCHITECTURE STEP 3: Deserialize and sign transaction
-      // The transaction contains ExecuteCrossSlab instruction which will:
-      // - Call Router Program
-      // - Router CPIs to multiple Slab Programs
-      // - Each slab executes CommitFill
-      // - Router updates Portfolio with net exposure
-      
-      const transaction = Transaction.from(
-        Buffer.from(sdkResult.transaction, 'base64')
-      );
-      
-      console.log('✅ STEP 3: Signing transaction with Phantom...');
-      const signed = await signTransaction(transaction);
-      
-      console.log('✅ STEP 4: Sending to Solana (Router Program)');
-      const signature = await connection.sendRawTransaction(signed.serialize());
-      
-      console.log('⏳ Confirming transaction...');
-      await connection.confirmTransaction(signature, 'confirmed');
-      
-      console.log('✅ STEP 5: Router executed CPIs to multiple slabs');
-      console.log('✅ STEP 6: Portfolio updated with net exposure');
-      console.log(`Transaction: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
-      
-      alert(`✅ Cross-Slab Execution Complete!\n\nFilled: ${executionPlan.totalQuantity} ${getBaseCurrency()}\nAvg Price: ${executionPlan.avgPrice.toFixed(2)} ${getQuoteCurrency()}\nSlabs used: ${executionPlan.slabs.length}\n\nSignature: ${signature.substring(0, 20)}...`);
-      
-      // Reset form
-      setQuantity("");
-      setLimitPrice("");
-      setExecutionPlan(null);
-      
-    } catch (error: any) {
-      console.error('❌ Cross-slab execution error:', error);
-      
-      // Handle specific errors
-      if (error.message?.includes('User rejected')) {
-        alert('Transaction cancelled');
-      } else if (error.message?.includes('simulation failed')) {
-        alert('⚠️ Transaction simulation failed (normal on testnet)\n\nThe flow works but programs need initialization.');
-      } else {
-        alert(`Execution failed: ${error.message || 'Unknown error'}`);
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <>
-      {/* Cross-Slab Info Modal */}
-      {showCrossSlabInfo && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <motion.div 
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-[#0a0a0f] border border-purple-500/30 rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden shadow-2xl"
-          >
-            {/* Header */}
-            <div className="px-6 py-4 border-b border-[#181825] flex items-center justify-between bg-gradient-to-r from-purple-500/10 to-pink-500/10">
-              <h3 className="text-white font-bold text-xl flex items-center gap-3">
-                <Zap className="w-6 h-6 text-purple-400" />
-                Cross-Slab Router - How It Works
-              </h3>
-              <button 
-                onClick={() => setShowCrossSlabInfo(false)}
-                className="text-gray-400 hover:text-white transition-colors"
-              >
-                <span className="text-3xl">×</span>
-              </button>
-            </div>
-
-            {/* Body - Scrollable */}
-            <div className="px-6 py-6 max-h-[75vh] overflow-y-auto space-y-6">
-              
-              {/* Phase 1: Order Submission */}
-              <motion.div 
-                initial={{ x: -20, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: 0.1 }}
-                className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 rounded-xl p-5 border border-blue-500/30"
-              >
-                <h4 className="text-cyan-300 font-bold text-lg mb-4 flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center border border-cyan-500/40">
-                    <span className="text-cyan-300 font-bold">1</span>
-                  </div>
-                  Phase 1: Order Submission
-                </h4>
-                <div className="space-y-3">
-                  <div className="bg-black/40 rounded-lg p-4">
-                    <pre className="text-sm text-gray-300 font-mono leading-relaxed">
-{`You: "Buy 500 ETH @ max $3,885 each"
-         ↓
-Frontend: Build ExecuteCrossSlab instruction
-         ↓
-SDK: Validate portfolio & margin requirements
-         ↓
-✅ Order accepted for routing`}
-                    </pre>
-                  </div>
-                  <div className="text-sm text-gray-300">
-                    The router checks your <span className="text-cyan-400 font-semibold">portfolio health</span> and ensures you have enough <span className="text-cyan-400 font-semibold">free collateral</span> before proceeding.
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Phase 2: Quote Aggregation */}
-              <motion.div 
-                initial={{ x: -20, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: 0.2 }}
-                className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-xl p-5 border border-purple-500/30"
-              >
-                <h4 className="text-purple-300 font-bold text-lg mb-4 flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center border border-purple-500/40">
-                    <span className="text-purple-300 font-bold">2</span>
-                  </div>
-                  Phase 2: Quote Aggregation
-                </h4>
-                <div className="space-y-3">
-                  <div className="bg-black/40 rounded-lg p-4">
-                    <pre className="text-sm text-gray-300 font-mono leading-relaxed">
-{`Router reads QuoteCache from multiple slabs:
-
-Slab A: 1500 ETH @ $3,881.95  (0.02% fee)
-Slab B: 2300 ETH @ $3,882.15  (0.015% fee)
-Slab C:  980 ETH @ $3,881.75  (0.025% fee)
-         ↓
-Sort by VWAP (best price first):
-1. Slab C: $3,881.75 ← BEST!
-2. Slab A: $3,881.95
-3. Slab B: $3,882.15
-
-Optimal split calculation:
-• Take 500 ETH from Slab C
-• Total cost: $1,940,875
-• Avg price: $3,881.75
-✅ Fully filled within limit!`}
-                    </pre>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div className="bg-purple-500/10 rounded-lg p-3 border border-purple-500/20 text-center">
-                      <div className="text-gray-400">Available Liquidity</div>
-                      <div className="text-white font-bold text-lg mt-1">4780 ETH</div>
-                    </div>
-                    <div className="bg-purple-500/10 rounded-lg p-3 border border-purple-500/20 text-center">
-                      <div className="text-gray-400">Price Levels</div>
-                      <div className="text-white font-bold text-lg mt-1">3 Slabs</div>
-                    </div>
-                    <div className="bg-purple-500/10 rounded-lg p-3 border border-purple-500/20 text-center">
-                      <div className="text-gray-400">Best VWAP</div>
-                      <div className="text-green-400 font-bold text-lg mt-1">$3,881.75</div>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Phase 3: Atomic Execution */}
-              <motion.div 
-                initial={{ x: -20, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: 0.3 }}
-                className="bg-gradient-to-r from-green-500/10 to-emerald-500/10 rounded-xl p-5 border border-green-500/30"
-              >
-                <h4 className="text-green-300 font-bold text-lg mb-4 flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center border border-green-500/40">
-                    <span className="text-green-300 font-bold">3</span>
-                  </div>
-                  Phase 3: Atomic Execution
-                </h4>
-                <div className="space-y-3">
-                  <div className="bg-black/40 rounded-lg p-4">
-                    <pre className="text-sm text-gray-300 font-mono leading-relaxed">
-{`Router CPIs to each slab's commit_fill:
-
-┌────────────┐
-│  Router    │ Execute on Slab C (500 ETH)
-└─────┬──────┘
-      │ CPI
-      ↓
-┌────────────┐
-│  Slab C    │ commit_fill(500 ETH)
-└─────┬──────┘
-      │
-      ├──→ Match against orderbook
-      ├──→ Execute fills
-      └──→ Return FillReceipt
-             ↓
-      ✅ Receipt: {
-           filled: 500 ETH,
-           avgPrice: 3881.75,
-           fees: 0.025%
-         }
-
-ALL-OR-NOTHING ATOMICITY:
-✅ If Slab C succeeds → Commit
-❌ If Slab C fails → ROLLBACK entire tx
-   No partial fills!`}
-                    </pre>
-                  </div>
-                  <div className="bg-green-500/10 rounded-lg p-3 border border-green-500/20">
-                    <div className="text-sm text-green-300 font-semibold mb-2">🛡️ Atomic Guarantee</div>
-                    <div className="text-xs text-gray-300">
-                      Either <span className="text-white font-semibold">ALL slabs execute</span> or <span className="text-white font-semibold">NONE execute</span>. 
-                      No partial fills, no stuck capital. If any slab fails, the entire transaction reverts.
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Phase 4: Portfolio Update */}
-              <motion.div 
-                initial={{ x: -20, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: 0.4 }}
-                className="bg-gradient-to-r from-orange-500/10 to-yellow-500/10 rounded-xl p-5 border border-orange-500/30"
-              >
-                <h4 className="text-orange-300 font-bold text-lg mb-4 flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center border border-orange-500/40">
-                    <span className="text-orange-300 font-bold">4</span>
-                  </div>
-                  Phase 4: Portfolio Update
-                </h4>
-                <div className="space-y-3">
-                  <div className="bg-black/40 rounded-lg p-4">
-                    <pre className="text-sm text-gray-300 font-mono leading-relaxed">
-{`Router aggregates FillReceipts:
-
-Receipt from Slab C:
-  + 500 ETH position
-  - $1,940,875 USDC
-
-Portfolio NET exposure calculation:
-  Old: 0 ETH position
-  New: +500 ETH position
-  
-Margin calculation on NET exposure:
-  Initial Margin (IM):  $388,175 (20%)
-  Maintenance Margin:   $194,087 (10%)
-  Free Collateral:      Updated
-
-✅ Portfolio updated with net positions!`}
-                    </pre>
-                  </div>
-                  <div className="bg-orange-500/10 rounded-lg p-3 border border-orange-500/20">
-                    <div className="text-sm text-orange-300 font-semibold mb-2">💡 Capital Efficiency</div>
-                    <div className="text-xs text-gray-300">
-                      Margin is calculated on your <span className="text-white font-semibold">NET exposure</span> across all slabs, 
-                      not per-slab. This means offsetting positions reduce margin requirements!
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Full Architecture Diagram */}
-              <motion.div 
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.5 }}
-                className="bg-[#181825] rounded-xl p-6 border border-purple-500/20"
-              >
-                <h4 className="text-white font-bold text-lg mb-4 text-center">Complete Transaction Flow</h4>
-                <pre className="text-xs text-gray-300 font-mono leading-relaxed overflow-x-auto">
-{`┌─────────────────────────────────────────────────────────────────────┐
-│                         USER FRONTEND                               │
-│  "Buy 500 ETH @ $3,885 max"                                        │
-└────────────┬────────────────────────────────────────────────────────┘
-             │
-             │ 1. Submit Order
-             ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│                      CROSS-SLAB ROUTER                              │
-│  ┌──────────────────────────────────────────────────────────────┐  │
-│  │  QUOTE AGGREGATION ENGINE                                    │  │
-│  │  • Read QuoteCache from Slab A, B, C                        │  │
-│  │  • Calculate VWAP for each slab                             │  │
-│  │  • Sort by best price                                        │  │
-│  │  • Optimize split: Slab C (500 ETH @ $3,881.75)            │  │
-│  └──────────────────────────────────────────────────────────────┘  │
-│                                                                     │
-│  ┌──────────────────────────────────────────────────────────────┐  │
-│  │  ATOMIC EXECUTION ENGINE                                     │  │
-│  │  • CPI to Slab C: reserve(500 ETH)                          │  │
-│  │  • Receive hold_id from Slab C                              │  │
-│  │  • CPI to Slab C: commit_fill(hold_id)                      │  │
-│  │  • Receive FillReceipt from Slab C                          │  │
-│  │  • IF SUCCESS → Update Portfolio                            │  │
-│  │  • IF FAIL → ROLLBACK entire transaction                    │  │
-│  └──────────────────────────────────────────────────────────────┘  │
-└────────────┬────────────────────────────────────────────────────────┘
-             │
-             │ 2. CPI Calls
-             ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│                          SLAB C (Selected)                          │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌─────────────────┐  │
-│  │   ORDERBOOK      │  │   MATCHING       │  │  EXECUTION      │  │
-│  │                  │  │   ENGINE         │  │                 │  │
-│  │  Bids:           │  │                  │  │  Fill: 500 ETH  │  │
-│  │  $3881.80: 200   │→ │  Match best      │→ │  @ $3,881.75   │  │
-│  │  $3881.75: 800   │  │  prices          │  │  Total: $1.94M  │  │
-│  │  $3881.70: 500   │  │                  │  │  ✅ Success     │  │
-│  └──────────────────┘  └──────────────────┘  └─────────────────┘  │
-└────────────┬────────────────────────────────────────────────────────┘
-             │
-             │ 3. Return FillReceipt
-             ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│                      PORTFOLIO ACCOUNT                              │
-│  ┌──────────────────────────────────────────────────────────────┐  │
-│  │  NET POSITIONS (across all slabs):                           │  │
-│  │                                                               │  │
-│  │  ETH:  0 → +500 (+500)                                       │  │
-│  │  USDC: $2M → $60K (-$1.94M)                                  │  │
-│  │                                                               │  │
-│  │  MARGIN (calculated on NET exposure):                        │  │
-│  │  IM (20%):  $388,175                                         │  │
-│  │  MM (10%):  $194,087                                         │  │
-│  │  Free:      $2M - $388K = $1.61M ✅                          │  │
-│  └──────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────┘`}
-                </pre>
-              </motion.div>
-
-              {/* Key Benefits */}
-              <motion.div 
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.6 }}
-                className="grid grid-cols-2 gap-4"
-              >
-                <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-xl p-4 border border-green-500/20">
-                  <div className="text-green-300 font-bold mb-2 flex items-center gap-2">
-                    <Shield className="w-4 h-4" />
-                    Atomic Execution
-                  </div>
-                  <div className="text-xs text-gray-300 space-y-1">
-                    <div>✅ All slabs execute together</div>
-                    <div>✅ Or none execute at all</div>
-                    <div>✅ No partial fills</div>
-                    <div>✅ No stuck capital</div>
-                  </div>
-                </div>
-
-                <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 rounded-xl p-4 border border-blue-500/20">
-                  <div className="text-cyan-300 font-bold mb-2 flex items-center gap-2">
-                    <Target className="w-4 h-4" />
-                    Best Execution
-                  </div>
-                  <div className="text-xs text-gray-300 space-y-1">
-                    <div>✅ Auto-finds best prices</div>
-                    <div>✅ Aggregates liquidity</div>
-                    <div>✅ Minimizes slippage</div>
-                    <div>✅ Optimizes fees</div>
-                  </div>
-                </div>
-
-                <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-xl p-4 border border-purple-500/20">
-                  <div className="text-purple-300 font-bold mb-2 flex items-center gap-2">
-                    <DollarSign className="w-4 h-4" />
-                    Capital Efficiency
-                  </div>
-                  <div className="text-xs text-gray-300 space-y-1">
-                    <div>✅ Margin on NET exposure</div>
-                    <div>✅ Not per-slab margin</div>
-                    <div>✅ Offsetting positions reduce margin</div>
-                    <div>✅ Use capital across all slabs</div>
-                  </div>
-                </div>
-
-                <div className="bg-gradient-to-br from-orange-500/10 to-yellow-500/10 rounded-xl p-4 border border-orange-500/20">
-                  <div className="text-orange-300 font-bold mb-2 flex items-center gap-2">
-                    <Zap className="w-4 h-4" />
-                    Fast & Secure
-                  </div>
-                  <div className="text-xs text-gray-300 space-y-1">
-                    <div>✅ One transaction, one approval</div>
-                    <div>✅ Phantom wallet signs</div>
-                    <div>✅ ~7-10 seconds total</div>
-                    <div>✅ On-chain settlement</div>
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Example Trade */}
-              <motion.div 
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.7 }}
-                className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10 rounded-xl p-5 border border-cyan-500/30"
-              >
-                <h4 className="text-cyan-300 font-bold text-lg mb-4">📊 Real Example</h4>
-                <div className="bg-black/40 rounded-lg p-4 space-y-3">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <div className="text-gray-400 mb-1">Your Order</div>
-                      <div className="text-white">Buy 500 ETH @ $3,885 limit</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-400 mb-1">Router Finds</div>
-                      <div className="text-green-300">500 ETH @ $3,881.75 avg</div>
-                    </div>
-                  </div>
-                  <div className="border-t border-gray-700 pt-3">
-                    <div className="text-xs text-gray-400 mb-2">Execution Breakdown:</div>
-                    <div className="space-y-1 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-gray-300">Slab C: 500 ETH @ $3,881.75</span>
-                        <span className="text-white">$1,940,875</span>
-                      </div>
-                      <div className="flex justify-between border-t border-gray-700 pt-1 font-semibold">
-                        <span className="text-cyan-300">Total Cost</span>
-                        <span className="text-white">$1,940,875</span>
-                      </div>
-                      <div className="flex justify-between text-green-400">
-                        <span>You SAVED</span>
-                        <span>$1,625 vs limit!</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Speed Comparison */}
-              <motion.div 
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.8 }}
-                className="bg-gradient-to-r from-pink-500/10 to-rose-500/10 rounded-xl p-5 border border-pink-500/30"
-              >
-                <h4 className="text-pink-300 font-bold text-lg mb-4">⚡ Speed Comparison</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-black/40 rounded-lg p-4">
-                    <div className="text-gray-400 text-sm mb-2">Simple Trading</div>
-                    <div className="space-y-1 text-xs text-gray-300">
-                      <div>1. Reserve (approve)</div>
-                      <div>2. Wait for confirmation</div>
-                      <div>3. Commit (approve again)</div>
-                      <div>4. Wait for confirmation</div>
-                      <div className="text-yellow-400 pt-2 border-t border-gray-700">⏱️ ~15 seconds, 2 approvals</div>
-                    </div>
-                  </div>
-                  <div className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-lg p-4 border border-purple-500/40">
-                    <div className="text-purple-300 text-sm mb-2 font-semibold">Cross-Slab Router</div>
-                    <div className="space-y-1 text-xs text-gray-300">
-                      <div>1. Click Execute</div>
-                      <div>2. Approve once</div>
-                      <div>3. Atomic execution</div>
-                      <div>4. Done!</div>
-                      <div className="text-green-400 pt-2 border-t border-purple-500/40 font-semibold">⚡ ~7 seconds, 1 approval!</div>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-
-            </div>
-
-            {/* Footer */}
-            <div className="px-6 py-4 bg-[#181825]/30 border-t border-[#181825] flex justify-between items-center">
-              <div className="text-xs text-gray-400">
-                <Zap className="w-3 h-3 inline mr-1 text-purple-400" />
-                Powered by Solana's atomic CPI
-              </div>
-              <button
-                onClick={() => setShowCrossSlabInfo(false)}
-                className="px-6 py-2 rounded-lg font-semibold text-sm bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-purple-500/50 text-purple-200 hover:from-purple-500/40 hover:to-pink-500/40 transition-all"
-              >
-                Got it! Let's trade 🚀
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      <div className="w-full h-full bg-black/20 rounded-2xl border border-[#181825] overflow-hidden">
-      <div className="h-10 flex items-center justify-between px-3 border-b border-[#181825]">
-        <div className="flex items-center gap-2">
-          <h3 className="text-white font-medium text-sm">Cross-Slab Router</h3>
-          <span className="text-xs px-2 py-0.5 bg-purple-500/20 border border-purple-500/40 rounded text-purple-300 font-semibold">
-            ADVANCED
-          </span>
-          <button
-            onClick={() => setShowCrossSlabInfo(true)}
-            className="w-5 h-5 flex items-center justify-center bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 rounded transition-all"
-            title="How Cross-Slab Router works"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-300">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M12 16v-4"/>
-              <path d="M12 8h.01"/>
-            </svg>
-          </button>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="text-xs text-gray-400 hover:text-white"
-          >
-            {showAdvanced ? "Hide" : "Show"} Details
-          </button>
-        </div>
-      </div>
-      
-      {/* Deployment Version Toggle */}
-      <div className="px-3 py-2 bg-[#0a0a0f] border-b border-[#181825]">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400">Deployment:</span>
-          <button
-            onClick={() => setDeploymentVersion("v0")}
-            className={cn(
-              "text-xs px-2 py-1 rounded transition-all",
-              deploymentVersion === "v0"
-                ? "bg-cyan-500/30 border border-cyan-500/50 text-cyan-300 font-semibold"
-                : "bg-[#181825] border border-[#181825] text-gray-500 hover:text-gray-300"
-            )}
-            title="v0: Proof of concept, <$4 rent"
-          >
-            v0 PoC
-          </button>
-          <button
-            onClick={() => setDeploymentVersion("v1")}
-            className={cn(
-              "text-xs px-2 py-1 rounded transition-all",
-              deploymentVersion === "v1"
-                ? "bg-purple-500/30 border border-purple-500/50 text-purple-300 font-semibold"
-                : "bg-[#181825] border border-[#181825] text-gray-500 hover:text-gray-300"
-            )}
-            title="v1: Full production, ~$10k+ rent"
-          >
-            v1 Production
-          </button>
-          <div className="ml-auto text-xs">
-            {deploymentVersion === "v0" ? (
-              <span className="text-cyan-400">💎 Less than $4</span>
-            ) : (
-              <span className="text-purple-400">🚀 ~$10,000+</span>
-            )}
-          </div>
-        </div>
-        {deploymentVersion === "v0" ? (
-          <div className="text-xs text-gray-500 mt-1">
-            128KB slabs · 50 accounts · 300 orders · Proof of concept
-          </div>
-        ) : (
-          <div className="text-xs text-gray-500 mt-1">
-            10MB slabs · 10K accounts · 100K orders · Full production scale
-          </div>
-        )}
-      </div>
-      
-      <div className="p-3 space-y-3">
-        {/* Buy/Sell Toggle */}
-        <div className="flex bg-[#0a0a0f] rounded-lg p-1">
-          <button
-            onClick={() => setTradeSide("buy")}
-            className={cn(
-              "flex-1 py-2 rounded-md text-sm font-bold transition-all",
-              tradeSide === "buy"
-                ? "bg-gradient-to-r from-green-500/30 to-emerald-600/20 text-green-300 border border-green-500/40"
-                : "text-gray-500 hover:text-gray-300"
-            )}
-          >
-            📈 BUY
-          </button>
-          <button
-            onClick={() => setTradeSide("sell")}
-            className={cn(
-              "flex-1 py-2 rounded-md text-sm font-bold transition-all",
-              tradeSide === "sell"
-                ? "bg-gradient-to-r from-red-500/30 to-rose-600/20 text-red-300 border border-red-500/40"
-                : "text-gray-500 hover:text-gray-300"
-            )}
-          >
-            📉 SELL
-          </button>
-        </div>
-
-        {/* Quantity Input */}
-        <div>
-          <label className="block text-sm text-gray-300 mb-2 font-medium">
-            Total Quantity ({getBaseCurrency()})
-          </label>
-          <input
-            type="number"
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-            className="w-full bg-[#181825] border-2 border-[#181825] focus:border-purple-500/50 rounded-xl px-4 py-3 text-white text-base font-medium focus:outline-none transition-colors"
-            placeholder="Enter total amount..."
-            step="0.1"
-          />
-        </div>
-
-        {/* Limit Price Input */}
-        <div>
-          <label className="block text-sm text-gray-300 mb-2 font-medium">
-            Limit Price ({getQuoteCurrency()})
-          </label>
-          <input
-            type="number"
-            value={limitPrice}
-            onChange={(e) => setLimitPrice(e.target.value)}
-            className="w-full bg-[#181825] border-2 border-[#181825] focus:border-purple-500/50 rounded-xl px-4 py-3 text-white text-base font-medium focus:outline-none transition-colors"
-            placeholder={tradeSide === "buy" ? "Max price willing to pay..." : "Min price willing to accept..."}
-          />
-        </div>
-
-        {/* Available Slabs */}
-        {showAdvanced && (
-          <div className="bg-[#181825] rounded-xl p-3 space-y-2">
-            <div className="text-xs text-gray-400 font-semibold mb-2">Available Slabs</div>
-            {availableSlabs.map((slab) => (
-              <div key={slab.id} className="flex items-center justify-between text-xs bg-black/30 rounded-lg p-2">
-                <div>
-                  <div className="text-white font-medium">{slab.name}</div>
-                  <div className="text-gray-500">Liquidity: {slab.liquidity} {getBaseCurrency()}</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-gray-300">VWAP: ${slab.vwap.toFixed(2)}</div>
-                  <div className="text-gray-500">Fee: {slab.fee}%</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Execution Plan */}
-        {executionPlan && (
-          <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-xl p-4 border border-purple-500/30 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-purple-300 font-semibold">Execution Plan</span>
-              <span className="text-xs px-2 py-1 bg-purple-500/30 border border-purple-500/50 rounded text-purple-200">
-                {executionPlan.slabs.length} Slabs
-              </span>
-            </div>
-
-            {/* Slab breakdown */}
-            <div className="space-y-2">
-              {executionPlan.slabs.map((slab: any, idx: number) => (
-                <div key={idx} className="bg-black/30 rounded-lg p-2 text-xs">
-                  <div className="flex justify-between mb-1">
-                    <span className="text-gray-300">{slab.slabName}</span>
-                    <span className="text-white font-semibold">{slab.quantity} {getBaseCurrency()}</span>
-                  </div>
-                  <div className="flex justify-between text-gray-500">
-                    <span>@ ${slab.price.toFixed(2)}</span>
-                    <span>${slab.cost.toFixed(2)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Summary */}
-            <div className="pt-2 border-t border-purple-500/20 space-y-1">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-400">Total Filled:</span>
-                <span className="text-white font-semibold">{executionPlan.totalQuantity} {getBaseCurrency()}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-400">Avg Price:</span>
-                <span className="text-white font-semibold">${executionPlan.avgPrice.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-base font-bold pt-1 border-t border-purple-500/20">
-                <span className={tradeSide === "buy" ? "text-purple-300" : "text-green-300"}>
-                  {tradeSide === "buy" ? "Total Cost:" : "Total Revenue:"}
-                </span>
-                <span className={tradeSide === "buy" ? "text-white" : "text-green-400"}>
-                  ${executionPlan.totalCost.toFixed(2)}
-                </span>
-              </div>
-              {executionPlan.unfilled > 0 && (
-                <div className="text-xs text-yellow-400 mt-2">
-                  ⚠️ {executionPlan.unfilled.toFixed(2)} {getBaseCurrency()} unfilled
-                  {executionPlan.totalQuantity === 0 && tradeSide === "sell" && (
-                    <div className="text-xs text-orange-400 mt-1">
-                      💡 Slabs are offering ${availableSlabs[0]?.vwap.toFixed(2) || 0}, but your minimum is ${limitPrice}
-                      <br />
-                      Lower your limit price to ${(availableSlabs[0]?.vwap * 0.99).toFixed(2)} or less to fill
-                    </div>
-                  )}
-                  {executionPlan.totalQuantity === 0 && tradeSide === "buy" && (
-                    <div className="text-xs text-orange-400 mt-1">
-                      💡 Slabs are asking ${availableSlabs[0]?.vwap.toFixed(2) || 0}, but your max is ${limitPrice}
-                      <br />
-                      Raise your limit price to ${(availableSlabs[0]?.vwap * 1.01).toFixed(2)} or more to fill
-                    </div>
-                  )}
-                </div>
-              )}
-              {tradeSide === "sell" && executionPlan.totalQuantity > 0 && (
-                <div className="text-xs text-green-400/70 mt-2">
-                  💰 You will receive ${executionPlan.totalCost.toFixed(2)} USDC
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Execute Button */}
-        <button
-          onClick={handleExecuteCrossSlab}
-          disabled={!connected || submitting || !executionPlan || executionPlan.unfilled > 0}
-          className={cn(
-            "w-full py-4 rounded-xl font-bold text-base transition-all shadow-xl",
-            tradeSide === "buy"
-              ? "bg-gradient-to-r from-purple-500/40 to-pink-600/30 hover:from-purple-500/50 hover:to-pink-600/40 border-2 border-purple-500/60 text-purple-200"
-              : "bg-gradient-to-r from-green-500/40 to-emerald-600/30 hover:from-green-500/50 hover:to-emerald-600/40 border-2 border-green-500/60 text-green-200",
-            (!connected || submitting || !executionPlan || executionPlan.unfilled > 0) && "opacity-50 cursor-not-allowed"
-          )}
-        >
-          {submitting ? (
-            <span className="flex items-center justify-center gap-2">
-              <span className="animate-spin">⚡</span>
-              <span>Executing Across Slabs...</span>
-            </span>
-          ) : !connected ? (
-            "Connect Wallet"
-          ) : !executionPlan ? (
-            "Enter Quantity & Price"
-          ) : executionPlan.unfilled > 0 ? (
-            "Insufficient Liquidity"
-          ) : (
-            <span className="flex items-center justify-center gap-2">
-              <Zap className="w-5 h-5" />
-              <span>Execute Cross-Slab {tradeSide.toUpperCase()}</span>
-              {tradeSide === "sell" && " 💰"}
-            </span>
-          )}
-        </button>
-
-        {/* Info */}
-        <div className="text-xs text-gray-400 text-center">
-          <p>🚀 Advanced routing aggregates liquidity from multiple slabs</p>
-          <p className="text-purple-400 mt-1">Best execution · Atomic commits · Capital efficient</p>
-        </div>
-      </div>
-      </div>
-    </>
-  );
-};
-
-
-// Percolator Order Form Component - Portfolio Slice Based Trading
+// Simplified Order Form Component
 const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "solana" }) => {
   const wallet = useWallet();
   const { publicKey, connected, signTransaction } = wallet;
   
-  const [tradeSide, setTradeSide] = useState<"buy" | "sell">("buy") // User-facing: Buy or Sell
-  const [side, setSide] = useState("Reserve") // Internal: Reserve or Commit
-  const [selectedSlice, setSelectedSlice] = useState("Slice 1")
+  const [tradeSide, setTradeSide] = useState<"buy" | "sell">("buy")
   const [orderType, setOrderType] = useState("Limit")
   const [price, setPrice] = useState("")
   const [quantity, setQuantity] = useState("")
-  const [capLimit, setCapLimit] = useState("100")
-  const [multiAsset, setMultiAsset] = useState(false)
-  const [portfolio, setPortfolio] = useState<any>(null)
   const [submitting, setSubmitting] = useState(false)
   const [lastHoldId, setLastHoldId] = useState<number | null>(null)
   const [mounted, setMounted] = useState(false)
-  const [modalOpen, setModalOpen] = useState(false)
-  const [modalContent, setModalContent] = useState<{ title: string; message: string; type: 'success' | 'error' | 'info' | 'warning' }>({ title: '', message: '', type: 'info' })
-  const [currentMarketPrice, setCurrentMarketPrice] = useState<number>(0)
   const [toasts, setToasts] = useState<Array<{ id: string; message: string; type: 'success' | 'error' | 'warning' | 'info' }>>([]);
   const [realPrice, setRealPrice] = useState<number>(0);
-  const [showArchitecture, setShowArchitecture] = useState(false);
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Get symbol from selected coin
   const getSymbol = () => {
@@ -1557,7 +371,7 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
     }
   };
 
-  // Get color for selected market
+  // Get market color
   const getMarketColor = () => {
     switch(selectedCoin) {
       case "ethereum": return "text-blue-400";
@@ -1566,32 +380,15 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
     }
   };
 
-  // Get base currency (what you're buying/selling)
-  const getBaseCurrency = () => {
-    switch(selectedCoin) {
-      case "ethereum": return "ETH";
-      case "bitcoin": return "BTC";
-      case "solana": return "SOL";
-    }
-  };
-
-  // Get quote currency (what you're paying with)
-  const getQuoteCurrency = () => {
-    return "USDC"; // All markets are quoted in USDC
-  };
-
-  // Fetch real market price from backend
+  // Fetch real market price from CoinGecko (same source as chart)
   useEffect(() => {
     const fetchPrice = async () => {
       try {
-        const symbol = getSymbol();
-        if (!symbol) return; // Safety check
-        
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-        const response = await fetch(`${API_URL}/api/market/${symbol}/orderbook`);
+        const response = await fetch(`${API_URL}/api/dashboard/${selectedCoin}`);
         const data = await response.json();
-        if (data.midPrice) {
-          setRealPrice(data.midPrice);
+        if (data?.current_price) {
+          setRealPrice(data.current_price);
         }
       } catch (error) {
         // Silent fail
@@ -1599,108 +396,26 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
     };
 
     fetchPrice();
-    const interval = setInterval(fetchPrice, 1000); // Update every 1 second for real-time prices
+    const interval = setInterval(fetchPrice, 2000); // Update every 2 seconds
     return () => clearInterval(interval);
   }, [selectedCoin]);
 
-  // Auto-update price field for Market orders when price changes or currency switches
+  // Debug: Log the real price when it changes
   useEffect(() => {
-    if (orderType === "Market" && realPrice > 0) {
-      setPrice(realPrice.toFixed(2));
+    if (realPrice > 0) {
+      console.log(`Real market price for ${selectedCoin}: $${realPrice.toFixed(2)}`);
     }
-  }, [realPrice, orderType, selectedCoin]);
+  }, [realPrice, selectedCoin]);
 
-  // Clean console for video recording
-  useEffect(() => {
-    const originalWarn = console.warn;
-    const originalError = console.error;
-    const originalLog = console.log;
-    
-    console.warn = (...args) => {
-      const message = String(args[0] || '');
-      // Filter out development warnings
-      if (message.includes('React DevTools') || 
-          message.includes('Standard Wallet') ||
-          message.includes('Phantom was registered') ||
-          message.includes('MODULE_TYPELESS')) {
-        return;
-      }
-      originalWarn.apply(console, args);
-    };
-    
-    console.error = (...args) => {
-      const message = String(args[0] || '');
-      // Filter out expected errors
-      if (message.includes('telemetry.tradingview') ||
-          message.includes('ERR_BLOCKED_BY_CLIENT') ||
-          message.includes('Cannot listen to the event') ||
-          message.includes('contentWindow is not available') ||
-          message.includes('Failed to fetch') ||
-          message.includes('Fetch:POST https://telemetry')) {
-        return;
-      }
-      originalError.apply(console, args);
-    };
-    
-    console.log = (...args) => {
-      const message = String(args[0] || '');
-      // Filter TradingView logs
-      if (message.includes('tradingview') && message.includes('Fetch:POST')) {
-        return;
-      }
-      originalLog.apply(console, args);
-    };
-    
-    return () => {
-      console.warn = originalWarn;
-      console.error = originalError;
-      console.log = originalLog;
-    };
-  }, []);
-
-  const showToast = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') => {
+  const showToast = (message: string, type: 'success' | 'error' | 'warning' | 'info') => {
     const id = Date.now().toString();
     setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 5000);
+    setTimeout(() => closeToast(id), 5000);
   };
 
   const closeToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
+    setToasts(prev => prev.filter(toast => toast.id !== id));
   };
-
-  // Helper to show modal instead of alert
-  const showModal = (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
-    setModalContent({ title, message, type })
-    setModalOpen(true)
-  }
-
-  // Fix hydration error - only render wallet button after mount
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  // Fetch portfolio data when wallet connected
-  useEffect(() => {
-    if (!connected || !publicKey) return;
-
-    const fetchPortfolio = async () => {
-      try {
-        const walletAddress = publicKey.toBase58();
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-        const data = await fetch(`${API_URL}/api/user/${walletAddress}/portfolio`);
-        const portfolioData = await data.json();
-        setPortfolio(portfolioData);
-      } catch (error) {
-        console.error('Failed to fetch portfolio:', error);
-      }
-    };
-
-    fetchPortfolio();
-    const interval = setInterval(fetchPortfolio, 10000);
-    return () => clearInterval(interval);
-  }, [connected, publicKey]);
 
   const handleSubmitTrade = async () => {
     if (!connected || !publicKey || !signTransaction) {
@@ -1719,31 +434,21 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
       
       // Smart flow: Auto-reserve first, then auto-commit
       if (!lastHoldId) {
-        // No reservation yet, start with Reserve
-        setSide("Reserve");
-      } else {
-        // Have reservation, do Commit
-        setSide("Commit");
-      }
-      
-      // Automatic Reserve → Commit flow for user simplicity
-      // Step 1: Reserve liquidity
-      const reserveEndpoint = '/api/trade/reserve';
-      const reserveBody = {
-        user: walletAddress,
-        slice: selectedSlice,
-        orderType,
-        price: parseFloat(price),
-        quantity: parseFloat(quantity),
-        capLimit: parseFloat(capLimit),
-        multiAsset,
-        side: tradeSide, // Use the buy/sell toggle
-        instrument: 0,
-      };
+        // Reserve liquidity
+        const reserveEndpoint = '/api/trade/reserve';
+        const reserveBody = {
+          user: walletAddress,
+          slice: "Slice 1",
+          orderType,
+          price: parseFloat(price),
+          quantity: parseFloat(quantity),
+          capLimit: 100,
+          multiAsset: false,
+          side: tradeSide,
+          instrument: 0,
+        };
 
-      if (side === "Reserve") {
-        // RESERVE FLOW
-        console.log(`🔒 Step 1: Building Reserve transaction...`);
+        console.log(`Building Reserve transaction...`);
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
         const reserveResponse = await fetch(`${API_URL}${reserveEndpoint}`, {
           method: 'POST',
@@ -1759,736 +464,297 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
           return;
         }
 
-        console.log('📝 Transaction received from backend');
-
-        // REAL BLOCKCHAIN MODE - Sign with Phantom
+        // Sign with Phantom
         if (reserveResult.needsSigning && reserveResult.transaction && signTransaction) {
           try {
-            console.log('🔐 Signing Reserve with Phantom...');
+            console.log('Signing Reserve with Phantom...');
             
             const txBuffer = Buffer.from(reserveResult.transaction, 'base64');
             const transaction = Transaction.from(txBuffer);
+            
+            // Get FRESH blockhash right before sending
+            console.log('Getting fresh blockhash...');
+            // Use alternative RPC to bypass cache
+            const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
+            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
+            transaction.recentBlockhash = blockhash;
+            transaction.lastValidBlockHeight = lastValidBlockHeight;
+            
             const signedTx = await signTransaction(transaction);
             
-            console.log('📡 Submitting to Solana devnet...');
-            const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
-            const signature = await connection.sendRawTransaction(signedTx.serialize());
+            console.log('Submitting to Solana devnet...');
+            const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+              skipPreflight: false,
+              preflightCommitment: 'confirmed'
+            });
             
-            console.log('⏳ Confirming...');
-            await connection.confirmTransaction(signature, 'confirmed');
+            console.log('Confirming transaction...');
+            await connection.confirmTransaction({
+              signature,
+              blockhash,
+              lastValidBlockHeight
+            }, 'confirmed');
             
-            console.log('✅ Reserve confirmed!', signature);
+            console.log('Reserve confirmed!', signature);
             setLastHoldId(reserveResult.holdId);
-
-            showToast(
-              `✅ Reserve Confirmed On-Chain!\nHold ID: ${reserveResult.holdId}\nTx: ${signature.substring(0,8)}...\n\nClick COMMIT!`,
-              'success'
-            );
-
-            setSide("Commit");
-            setSubmitting(false);
-            return;
+            showToast('Reserve successful! Click to commit.', 'success');
+          } catch (error: any) {
+            console.error('Reserve failed:', error);
             
-          } catch (txError: any) {
-            // Silent error handling for clean console
-            
-            // Graceful fallback - still works for demo!
-            if (txError.message?.includes('simulation failed') || txError.message?.includes('0x')) {
-              // Silent fallback - show success to user
-              setLastHoldId(reserveResult.holdId);
-              setSide("Commit");
-              
+            // Check if it's an account initialization error
+            if (error.message?.includes('invalid owner') || error.message?.includes('0x1') || error.message?.includes('custom program error')) {
               showToast(
-                `✅ Reserve Saved (Demo)!\nHold ID: ${reserveResult.holdId}\n\nReady to COMMIT!`,
-                'success'
+                `Slab Program Update Required\n\n` +
+                `The auto-account creation feature has been added\n` +
+                `to the Slab program but needs to be deployed.\n\n` +
+                `To Enable Trading:\n` +
+                `1. Build updated Slab program\n` +
+                `2. Deploy to devnet\n` +
+                `3. Update backend with new program ID\n\n` +
+                `See BUILD_AND_DEPLOY.md for instructions!`,
+                'info'
               );
-              
-              setSubmitting(false);
-              return;
-            }
-            
-            // Only show error for real failures (user rejection, insufficient balance)
-            if (txError.message?.includes('User rejected')) {
-              showToast('❌ You cancelled the transaction', 'error');
-            } else if (txError.message?.includes('insufficient')) {
-              showToast('❌ Insufficient SOL for fees\n\nGet more from faucet', 'error');
             } else {
-              showToast('Transaction failed', 'error');
+              showToast(`Reserve failed: ${error.message}`, 'error');
             }
             setSubmitting(false);
             return;
           }
         }
+      } else {
+        // Commit the reserved order
+        const commitEndpoint = '/api/trade/commit';
+        const commitBody = {
+          user: walletAddress,
+          holdId: lastHoldId,
+          secret: "0".repeat(64), // Mock secret for testing
+        };
 
-        // Fallback if no transaction
-        setLastHoldId(reserveResult.holdId);
-        showToast(`✅ Reserve OK!\nHold ID: ${reserveResult.holdId}`, 'success');
-        setSide("Commit");
-        setSubmitting(false);
-        return;
-        
-      } else if (side === "Commit") {
-        // COMMIT FLOW
-        if (!lastHoldId) {
-          showToast('⚠️ No reservation found!\n\nReserve liquidity first', 'warning');
-          setSubmitting(false);
-          return;
-        }
-
-        console.log(`✅ Step 2: Building Commit transaction with Hold ID: ${lastHoldId}...`);
+        console.log(`Building Commit transaction...`);
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-        const commitResponse = await fetch(`${API_URL}/api/trade/commit`, {
+        const commitResponse = await fetch(`${API_URL}${commitEndpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user: walletAddress,
-            holdId: lastHoldId
-          })
+          body: JSON.stringify(commitBody)
         });
 
         const commitResult = await commitResponse.json();
         
         if (!commitResult.success) {
-          showToast(commitResult.error || 'Failed to commit trade', 'error');
+          showToast(commitResult.error || 'Failed to commit order', 'error');
           setSubmitting(false);
           return;
         }
 
-        console.log('📝 Commit transaction received from backend');
-
-        // REAL BLOCKCHAIN MODE - Sign with Phantom
+        // Sign with Phantom
         if (commitResult.needsSigning && commitResult.transaction && signTransaction) {
           try {
-            console.log('🔐 Signing Commit with Phantom...');
+            console.log('Signing Commit with Phantom...');
             
             const txBuffer = Buffer.from(commitResult.transaction, 'base64');
             const transaction = Transaction.from(txBuffer);
+            
+            // Get FRESH blockhash right before sending
+            console.log('Getting fresh blockhash...');
+            const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
+            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
+            transaction.recentBlockhash = blockhash;
+            transaction.lastValidBlockHeight = lastValidBlockHeight;
+            
             const signedTx = await signTransaction(transaction);
             
-            console.log('📡 Submitting to Solana devnet...');
-            const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
-            const signature = await connection.sendRawTransaction(signedTx.serialize());
+            console.log('Submitting to Solana devnet...');
+            const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+              skipPreflight: false,
+              preflightCommitment: 'confirmed'
+            });
             
-            console.log('⏳ Confirming...');
-            await connection.confirmTransaction(signature, 'confirmed');
+            console.log('Confirming transaction...');
+            await connection.confirmTransaction({
+              signature,
+              blockhash,
+              lastValidBlockHeight
+            }, 'confirmed');
             
-            console.log('🎉 Commit confirmed on-chain!', signature);
-
-            showToast(
-              `🎉 Trade Executed On-Chain!\n\nFilled: ${quantity} ${getBaseCurrency()}\nPrice: ${price} ${getQuoteCurrency()}\nTotal: ${(parseFloat(quantity) * parseFloat(price)).toFixed(2)} ${getQuoteCurrency()}\nTx: ${signature.substring(0,8)}...\n\nView: https://solscan.io/tx/${signature}?cluster=devnet`,
-              'success'
-            );
-
-            setQuantity("");
-            setPrice("");
-            setLastHoldId(null);
-            setSide("Reserve");
-            setSubmitting(false);
-            return;
-            
-          } catch (txError: any) {
-            // Silent error handling for clean console
-            
-            // Graceful success even if blockchain simulation fails
-            if (txError.message?.includes('simulation failed') || txError.message?.includes('0x')) {
-              // Silent success
-              showToast(
-                `🎉 Trade Executed!\n\nSide: ${tradeSide.toUpperCase()}\nFilled: ${quantity} ${getBaseCurrency()}\nPrice: ${price} ${getQuoteCurrency()}\nTotal: ${(parseFloat(quantity) * parseFloat(price)).toFixed(2)} ${getQuoteCurrency()}`,
-                'success'
-              );
-              setQuantity("");
-              setPrice("");
-              setLastHoldId(null);
-              setSide("Reserve");
-              setSubmitting(false);
-              return;
-            }
-            
-            // Only show error for real user failures
-            if (txError.message?.includes('User rejected')) {
-              showToast('❌ You cancelled the transaction', 'error');
-            } else if (txError.message?.includes('insufficient')) {
-              showToast('❌ Insufficient SOL for fees', 'error');
-            } else {
-              showToast('Transaction failed', 'error');
-            }
+            console.log('Commit confirmed!', signature);
+            setLastHoldId(null); // Reset for next trade
+            showToast('Order executed successfully!', 'success');
+          } catch (error: any) {
+            console.error('Commit failed:', error);
+            showToast(`Commit failed: ${error.message}`, 'error');
             setSubmitting(false);
             return;
           }
         }
-
-        // Fallback if no transaction
-        showToast(`🎉 Trade Executed!\nFilled: ${quantity}`, 'success');
-        setQuantity("");
-        setPrice("");
-        setLastHoldId(null);
-        setSide("Reserve");
-        setSubmitting(false);
-        return;
       }
     } catch (error: any) {
-      // Silent - errors already handled in try blocks
+      console.error('Trade failed:', error);
+      showToast(`Trade failed: ${error.message}`, 'error');
+    } finally {
       setSubmitting(false);
     }
   };
 
+  if (!mounted) return null;
+
   return (
     <>
       <ToastContainer toasts={toasts} onClose={closeToast} />
-    <div className="w-full h-full bg-black/20 rounded-2xl border border-[#181825] overflow-hidden">
-        <div className="h-10 flex items-center justify-between px-3 border-b border-[#181825]">
+      <div className="w-full h-full bg-black/20 rounded-2xl border border-[#181825] overflow-hidden">
+        {/* Header */}
+        <div className="h-12 flex items-center justify-between px-4 border-b border-[#181825]">
           <div className="flex items-center gap-2">
-            <h3 className="text-white font-medium text-sm">Percolator Trade</h3>
+            <h3 className="text-white font-semibold text-lg">Trade</h3>
             <span className="text-gray-500">·</span>
-            <span className={cn("text-xs font-medium", getMarketColor())}>
+            <span className={cn("text-sm font-medium", getMarketColor())}>
               {getMarketDisplayName()}
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowArchitecture(true)}
-              className="h-7 w-7 flex items-center justify-center text-[11px] font-medium bg-gradient-to-r from-purple-600/20 to-pink-600/20 hover:from-purple-600/30 hover:to-pink-600/30 border border-purple-500/30 rounded-md transition-all duration-200 text-purple-400 hover:text-purple-300"
-              title="How it works"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M12 16v-4"/>
-                <path d="M12 8h.01"/>
-              </svg>
-            </button>
-            <Link 
-              href="/monitor"
-              className="h-7 px-3 flex items-center gap-1.5 text-[11px] font-medium bg-gradient-to-r from-cyan-600/20 to-blue-600/20 hover:from-cyan-600/30 hover:to-blue-600/30 border border-cyan-500/30 rounded-md transition-all duration-200 text-cyan-400 hover:text-cyan-300"
-            >
-              <Activity className="w-3 h-3" />
-              <span>Monitor</span>
-            </Link>
-        </div>
-      </div>
-      
-      <div className="p-3 space-y-3">
-        {/* Simple Buy/Sell Tabs */}
-        <div className="flex bg-[#0a0a0f] rounded-lg p-1">
-          <button
-            onClick={() => setTradeSide("buy")}
-            className={cn(
-              "flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all",
-              tradeSide === "buy"
-                ? "bg-gradient-to-r from-green-500/30 to-emerald-500/20 text-green-400 border-2 border-green-500/50 shadow-lg shadow-green-500/20"
-                : "text-gray-500 hover:text-gray-300"
-            )}
-          >
-            <div className="flex flex-col items-center gap-1">
-              <span className="text-lg">📈</span>
-              <span>BUY</span>
-            </div>
-          </button>
-          <button
-            onClick={() => setTradeSide("sell")}
-            className={cn(
-              "flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all",
-              tradeSide === "sell"
-                ? "bg-gradient-to-r from-red-500/30 to-rose-500/20 text-red-400 border-2 border-red-500/50 shadow-lg shadow-red-500/20"
-                : "text-gray-500 hover:text-gray-300"
-            )}
-          >
-            <div className="flex flex-col items-center gap-1">
-              <span className="text-lg">📉</span>
-              <span>SELL</span>
-            </div>
-          </button>
-        </div>
-
-        {/* Order Type - Simpler */}
-        <div className="flex bg-[#181825] rounded-lg p-0.5">
-          <button
-            onClick={() => setOrderType("Limit")}
-            className={cn(
-              "flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-colors",
-              orderType === "Limit"
-                ? "bg-[#B8B8FF]/20 text-[#B8B8FF]"
-                : "text-gray-500 hover:text-gray-300"
-            )}
-          >
-            Limit
-          </button>
-          <button
-            onClick={() => {
-              setOrderType("Market");
-              if (realPrice > 0) {
-                setPrice(realPrice.toFixed(2));
-              }
-            }}
-            className={cn(
-              "flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-colors",
-              orderType === "Market"
-                ? "bg-[#B8B8FF]/20 text-[#B8B8FF]"
-                : "text-gray-500 hover:text-gray-300"
-            )}
-          >
-            Market
-          </button>
-        </div>
-
-        {/* Wallet Status & Portfolio Info */}
-        {!connected ? (
-          <div className="bg-[#181825] rounded-lg p-3 text-center">
-            <Wallet className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-            <p className="text-xs text-gray-400 mb-2">Connect your Phantom wallet to start trading</p>
-        </div>
-        ) : (
-          <div className="space-y-2">
-            <div className="bg-[#181825] rounded-lg p-2 space-y-1">
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-400">Wallet:</span>
-                <span className="text-white font-mono text-[10px]">
-                  {publicKey?.toBase58().slice(0, 4)}...{publicKey?.toBase58().slice(-4)}
-                </span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-400">SOL Balance:</span>
-                <span className="text-white">{portfolio?.equity ? portfolio.equity.toFixed(3) : '0.000'} SOL</span>
-              </div>
-              <div className="flex justify-between text-xs border-t border-[#181825] pt-1">
-                <span className="text-gray-400 text-[10px]">Tx Fee (each):</span>
-                <span className="text-gray-500 text-[10px]">~0.000005 SOL</span>
-              </div>
-            </div>
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-2">
-              <p className="text-[10px] text-blue-400">
-                💡 <span className="font-semibold">Testing Mode:</span> Only SOL needed for transaction fees!
-              </p>
-            </div>
+            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+            <span className="text-xs text-green-400">Live</span>
           </div>
-        )}
+        </div>
+        
+        <div className="p-4 space-y-4">
+          {/* Buy/Sell Toggle */}
+          <div className="flex bg-[#0a0a0f] rounded-lg p-1">
+            <button
+              onClick={() => setTradeSide("buy")}
+              className={cn(
+                "flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all",
+                tradeSide === "buy"
+                  ? "bg-green-500/20 text-green-400 border border-green-500/50"
+                  : "text-gray-500 hover:text-gray-300"
+              )}
+            >
+              Buy
+            </button>
+            <button
+              onClick={() => setTradeSide("sell")}
+              className={cn(
+                "flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all",
+                tradeSide === "sell"
+                  ? "bg-red-500/20 text-red-400 border border-red-500/50"
+                  : "text-gray-500 hover:text-gray-300"
+              )}
+            >
+              Sell
+            </button>
+          </div>
 
-
-        {/* Price Input - Cleaner */}
-        <div>
-          <label className="block text-sm text-gray-300 mb-2 font-medium">
-            Price ({getQuoteCurrency()})
-          </label>
-          <div className="relative">
-            <input
-              type="number"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              className="w-full bg-[#181825] border-2 border-[#181825] focus:border-[#B8B8FF]/50 rounded-xl px-4 py-3 text-white text-base font-medium focus:outline-none transition-colors"
-              placeholder={orderType === "Market" ? "Market Price" : "Enter price..."}
-              disabled={orderType === "Market"}
-            />
-            {orderType === "Limit" && (
+          {/* Price Input */}
+          <div className="space-y-2">
+            <label className="text-xs text-gray-400 font-medium">Price (USDC)</label>
+            <div className="relative">
+              <input
+                type="number"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="0.00"
+                className="w-full bg-[#0a0a0f] border border-[#181825] rounded-lg px-3 py-3 text-white placeholder-gray-500 focus:border-blue-500/50 focus:outline-none"
+              />
               <button
                 onClick={() => {
                   if (realPrice > 0) {
-                    setPrice(realPrice.toFixed(4));
+                    setPrice(realPrice.toFixed(2));
                   }
                 }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 bg-[#B8B8FF]/10 hover:bg-[#B8B8FF]/20 border border-[#B8B8FF]/30 rounded-lg text-[#B8B8FF] text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!realPrice}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-blue-400 hover:text-blue-300"
+                title={realPrice > 0 ? `Use market price: $${realPrice.toFixed(2)}` : 'Loading price...'}
               >
-                Use Mid {realPrice > 0 ? `(${realPrice.toFixed(2)})` : ''}
-            </button>
-            )}
+                {realPrice > 0 ? `$${realPrice.toFixed(2)}` : 'Loading...'}
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* Amount Input - Cleaner */}
-        <div>
-          <label className="block text-sm text-gray-300 mb-2 font-medium">
-            Amount ({getBaseCurrency()})
-          </label>
-          <div className="relative">
-          <input
-            type="number"
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-              className="w-full bg-[#181825] border-2 border-[#181825] focus:border-[#B8B8FF]/50 rounded-xl px-4 py-3 text-white text-base font-medium focus:outline-none transition-colors"
-              placeholder="Enter amount..."
-              step="0.1"
+          {/* Quantity Input */}
+          <div className="space-y-2">
+            <label className="text-xs text-gray-400 font-medium">Amount ({selectedCoin.toUpperCase()})</label>
+            <input
+              type="number"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              placeholder="0.00"
+              className="w-full bg-[#0a0a0f] border border-[#181825] rounded-lg px-3 py-3 text-white placeholder-gray-500 focus:border-blue-500/50 focus:outline-none"
             />
-            <button
-              onClick={() => setQuantity("1.0")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 bg-gradient-to-r from-purple-500/20 to-blue-500/20 hover:from-purple-500/30 hover:to-blue-500/30 border border-purple-500/30 rounded-lg text-purple-400 text-xs font-bold transition-all"
-              disabled={!connected}
+          </div>
+
+          {/* Order Type */}
+          <div className="space-y-2">
+            <label className="text-xs text-gray-400 font-medium">Order Type</label>
+            <select
+              value={orderType}
+              onChange={(e) => setOrderType(e.target.value)}
+              className="w-full bg-[#0a0a0f] border border-[#181825] rounded-lg px-3 py-3 text-white focus:border-blue-500/50 focus:outline-none"
             >
-              1.0
-            </button>
+              <option value="Limit">Limit Order</option>
+              <option value="Market">Market Order</option>
+            </select>
           </div>
-          {price && quantity && (
-            <div className="text-xs text-gray-400 mt-1.5 flex justify-between">
-              <span>Total:</span>
-              <span className="text-white font-medium">{(parseFloat(quantity) * parseFloat(price)).toFixed(2)} {getQuoteCurrency()}</span>
+
+          {/* Submit Button */}
+          <button
+            onClick={handleSubmitTrade}
+            disabled={submitting || !connected || !price || !quantity}
+            className={cn(
+              "w-full py-4 rounded-lg font-bold text-sm transition-all",
+              tradeSide === "buy"
+                ? "bg-green-500/20 text-green-400 border border-green-500/50 hover:bg-green-500/30"
+                : "bg-red-500/20 text-red-400 border border-red-500/50 hover:bg-red-500/30",
+              (submitting || !connected || !price || !quantity) && "opacity-50 cursor-not-allowed"
+            )}
+          >
+            {submitting ? (
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                Processing...
+              </div>
+            ) : !connected ? (
+              "Connect Wallet"
+            ) : !lastHoldId ? (
+              `Reserve ${tradeSide === "buy" ? "Buy" : "Sell"} Order`
+            ) : (
+              `Commit ${tradeSide === "buy" ? "Buy" : "Sell"} Order`
+            )}
+          </button>
+
+          {/* Wallet Info */}
+          {connected && publicKey && (
+            <div className="bg-[#0a0a0f] rounded-lg p-3 space-y-2">
+              <div className="text-xs text-gray-400 font-medium">Wallet</div>
+              <div className="text-xs text-gray-300 font-mono">
+                {publicKey.toBase58().slice(0, 8)}...{publicKey.toBase58().slice(-8)}
+              </div>
             </div>
           )}
         </div>
-
-        {/* Simple Order Summary */}
-        {quantity && price && (
-          <div className={cn(
-            "rounded-xl p-3 border-2",
-            tradeSide === "buy" 
-              ? "bg-green-500/5 border-green-500/30" 
-              : "bg-red-500/5 border-red-500/30"
-          )}>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-400">Order Summary</span>
-              <span className={cn(
-                "text-xs font-bold",
-                tradeSide === "buy" ? "text-green-400" : "text-red-400"
-              )}>
-                {tradeSide.toUpperCase()} {orderType.toUpperCase()}
-              </span>
-          </div>
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-400">Amount:</span>
-                <span className="text-white font-medium">{parseFloat(quantity).toFixed(2)} {getBaseCurrency()}</span>
-        </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-400">Price:</span>
-                <span className="text-white font-medium">{parseFloat(price).toFixed(2)} {getQuoteCurrency()}</span>
-              </div>
-              <div className="flex justify-between text-base font-bold pt-1.5 border-t border-gray-700">
-                <span className={tradeSide === "buy" ? "text-green-400" : "text-red-400"}>Total:</span>
-                <span className="text-white">
-                  {(parseFloat(quantity) * parseFloat(price)).toFixed(2)} {getQuoteCurrency()}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-
-        {/* Simplified Submit Button */}
-        <button
-          onClick={handleSubmitTrade}
-          disabled={!connected || submitting || !quantity || !price}
-          className={cn(
-            "w-full py-4 rounded-xl font-bold text-base transition-all shadow-xl transform active:scale-95",
-            tradeSide === "buy"
-              ? "bg-gradient-to-r from-green-500/40 to-emerald-600/30 hover:from-green-500/50 hover:to-emerald-600/40 border-2 border-green-500/60 text-green-300 hover:shadow-green-500/30"
-              : "bg-gradient-to-r from-red-500/40 to-rose-600/30 hover:from-red-500/50 hover:to-rose-600/40 border-2 border-red-500/60 text-red-300 hover:shadow-red-500/30",
-            (!connected || submitting || !quantity || !price) && "opacity-50 cursor-not-allowed hover:shadow-none"
-          )}
-        >
-          {submitting ? (
-            <span className="flex items-center justify-center gap-2">
-              <span className="animate-spin">⏳</span>
-              <span>Processing...</span>
-            </span>
-          ) : !connected ? (
-            <span className="flex items-center justify-center gap-2">
-              <Wallet className="w-5 h-5" />
-              <span>Connect Wallet</span>
-            </span>
-          ) : (
-            <span className="flex items-center justify-center gap-2">
-              <span className="text-xl">{tradeSide === "buy" ? "📈" : "📉"}</span>
-              <span>
-                {tradeSide === "buy" ? "BUY" : "SELL"}
-              </span>
-            </span>
-          )}
-        </button>
-
-        {/* Simple Fee Info */}
-        {connected && quantity && price && (
-          <div className="text-xs text-center text-gray-400">
-            Estimated cost: {(parseFloat(quantity) * parseFloat(price)).toFixed(2)} SOL + ~0.00001 SOL fee
-          </div>
-        )}
-
-        {/* Test Button - Simple SOL Transfer */}
-        {connected && (
-          <div className="space-y-2 pt-2 border-t border-[#181825]/50">
-            <button
-              onClick={async () => {
-                if (!publicKey || !signTransaction) return;
-                setSubmitting(true);
-                try {
-                  showModal(
-                    '✅ Integration Status',
-                    `✅ Wallet connected: ${publicKey.toBase58().slice(0,8)}...\n` +
-                    `✅ Sign function available: Yes\n` +
-                    `✅ Backend API: Running\n` +
-                    `✅ Devnet blockhash: Working\n` +
-                    `✅ Programs DEPLOYED to devnet! 🚀\n\n` +
-                    `📦 Deployed Program IDs:\n\n` +
-                    `Slab Program:\n` +
-                    `6EF2acRfPejnxXYd9apKc2wb3p2NLG8rKgWbCfp5G7Uz\n\n` +
-                    `Router Program:\n` +
-                    `9CQWTSDobkHqWzvx4nufdke4C8GKuoaqiNBBLEYFoHoG\n\n` +
-                    `🔍 View on Solana Explorer:\n` +
-                    `https://explorer.solana.com/address/6EF2acRfPejnxXYd9apKc2wb3p2NLG8rKgWbCfp5G7Uz?cluster=devnet\n\n` +
-                    `🎯 Ready to trade on-chain!\n` +
-                    `Click "🔒 Reserve Liquidity" to start.`,
-                    'success'
-                  );
-                } catch (error: any) {
-                  console.error(error);
-                } finally {
-                  setSubmitting(false);
-                }
-              }}
-              disabled={submitting}
-              className="w-full py-2 rounded-lg font-medium text-xs bg-green-500/20 border border-green-500/30 text-green-400 hover:bg-green-500/30 transition-colors"
-            >
-              ✅ Check Integration Status
-            </button>
-            
-            <div className="text-xs text-center text-green-500">
-              🚀 Programs deployed! Ready for on-chain trading.
-            </div>
-          </div>
-        )}
-
-        {/* Transaction Info */}
-        <div className="space-y-1 text-xs">
-          <div className="flex justify-between text-gray-400">
-            <span>Network Fee:</span>
-            <span className="text-white">~0.000005 SOL</span>
-          </div>
-          <div className="flex justify-between text-gray-400">
-            <span>Protocol Fee:</span>
-            <span className="text-white">0.02%</span>
-          </div>
-          <div className="flex justify-between text-gray-400">
-            <span>Estimated Total:</span>
-            <span className="text-white">{quantity} USDC</span>
-          </div>
-        </div>
-
-        {/* Advanced Options */}
-        <div className="space-y-2 pt-3 border-t border-[#181825]">
-          <div className="text-xs text-gray-400 mb-2">Trade Settings</div>
-          
-          <div className="space-y-1">
-            <div className="flex space-x-1">
-              <button className="flex-1 py-1 px-2 bg-[#B8B8FF]/10 border border-[#B8B8FF]/30 rounded text-[#B8B8FF] text-xs">Post Only</button>
-              <button className="flex-1 py-1 px-2 bg-[#181825] border border-[#181825] rounded text-gray-400 text-xs">IOC</button>
-              <button className="flex-1 py-1 px-2 bg-[#181825] border border-[#181825] rounded text-gray-400 text-xs">FOK</button>
-            </div>
-          </div>
-          
-          <div className="space-y-1">
-            <div className="flex items-center space-x-2">
-              <input type="checkbox" defaultChecked className="w-3 h-3 text-[#B8B8FF] bg-[#181825] border-[#181825] rounded focus:ring-[#B8B8FF]/50" />
-              <span className="text-xs text-gray-400">Transaction Confirmation</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <input type="checkbox" className="w-3 h-3 text-[#B8B8FF] bg-[#181825] border-[#181825] rounded focus:ring-[#B8B8FF]/50" />
-              <span className="text-xs text-gray-400">Auto-Rebalance Slice</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Beautiful Modal for Messages */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn" onClick={() => setModalOpen(false)}>
-          <div className="bg-[#0a0a0f] border-2 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-slideUp" onClick={(e) => e.stopPropagation()}>
-            {/* Modal Header */}
-            <div className={cn(
-              "px-6 py-4 border-b flex items-center justify-between",
-              modalContent.type === 'success' && "bg-green-500/10 border-green-500/30",
-              modalContent.type === 'error' && "bg-red-500/10 border-red-500/30",
-              modalContent.type === 'warning' && "bg-yellow-500/10 border-yellow-500/30",
-              modalContent.type === 'info' && "bg-blue-500/10 border-blue-500/30"
-            )}>
-              <h3 className={cn(
-                "text-lg font-bold flex items-center space-x-2",
-                modalContent.type === 'success' && "text-green-400",
-                modalContent.type === 'error' && "text-red-400",
-                modalContent.type === 'warning' && "text-yellow-400",
-                modalContent.type === 'info' && "text-blue-400"
-              )}>
-                <span>{modalContent.title}</span>
-              </h3>
-              <button 
-                onClick={() => setModalOpen(false)}
-                className="text-gray-400 hover:text-white transition-colors"
-              >
-                <span className="text-2xl">×</span>
-              </button>
-    </div>
-
-            {/* Modal Body */}
-            <div className="px-6 py-6 max-h-[70vh] overflow-y-auto">
-              <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono leading-relaxed">
-                {modalContent.message}
-              </pre>
-          </div>
-          
-            {/* Modal Footer */}
-            <div className="px-6 py-4 bg-[#181825]/30 border-t border-[#181825] flex justify-end">
-              <button
-                onClick={() => setModalOpen(false)}
-                className={cn(
-                  "px-6 py-2 rounded-lg font-medium text-sm transition-all",
-                  modalContent.type === 'success' && "bg-green-500/20 border border-green-500/50 text-green-300 hover:bg-green-500/30",
-                  modalContent.type === 'error' && "bg-red-500/20 border border-red-500/50 text-red-300 hover:bg-red-500/30",
-                  modalContent.type === 'warning' && "bg-yellow-500/20 border border-yellow-500/50 text-yellow-300 hover:bg-yellow-500/30",
-                  modalContent.type === 'info' && "bg-blue-500/20 border border-blue-500/50 text-blue-300 hover:bg-blue-500/30"
-                )}
-              >
-                Close
-              </button>
-              </div>
-            </div>
-            </div>
-      )}
-
-      {/* Architecture Info Modal */}
-      {showArchitecture && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#0a0a0f] border border-[#B8B8FF]/30 rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
-            {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-[#181825] flex items-center justify-between">
-              <h3 className="text-white font-semibold text-lg flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-400">
-                  <circle cx="12" cy="12" r="10"/>
-                  <path d="M12 16v-4"/>
-                  <path d="M12 8h.01"/>
-                </svg>
-                How Percolator Works
-              </h3>
-              <button 
-                onClick={() => setShowArchitecture(false)}
-                className="text-gray-400 hover:text-white transition-colors"
-              >
-                <span className="text-2xl">×</span>
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="px-6 py-6 max-h-[70vh] overflow-y-auto">
-              <div className="space-y-6">
-                {/* Architecture Diagram */}
-                <div className="bg-[#181825] rounded-xl p-6 border border-[#B8B8FF]/20">
-                  <h4 className="text-white font-semibold mb-4 text-center">Architecture Flow</h4>
-                  <pre className="text-sm text-gray-300 font-mono leading-relaxed">
-{`┌─────────────────┐
-│  Trade Panel    │ ← What you see (Frontend)
-│  (UI in browser)│   • Buy/Sell buttons
-└────────┬────────┘   • Real-time prices
-         │            • Order forms
-         │ 1. User clicks "BUY" or "SELL"
-         ↓
-┌─────────────────┐
-│  Backend API    │ ← Builds transactions
-│  (Node.js)      │   • Creates Reserve tx
-└────────┬────────┘   • Creates Commit tx
-         │            • Fetches prices
-         │ 2. Creates Solana transaction
-         ↓
-┌─────────────────┐
-│  Phantom Wallet │ ← Signs transaction
-└────────┬────────┘   • You approve
-         │            • Signs with key
-         │ 3. Sends to blockchain
-         ↓
-┌─────────────────┐
-│  SLAB PROGRAM   │ ← On-chain orderbook (Solana)
-│  (Rust/BPF)     │   • Stores orders
-└─────────────────┘   • Matches trades
-                      • Updates positions
-                      • Records history`}
-                  </pre>
-                </div>
-
-                {/* What the Slab Is */}
-                <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-xl p-5 border border-purple-500/20">
-                  <h4 className="text-purple-300 font-semibold mb-3 flex items-center gap-2">
-                    <Shield className="w-4 h-4" />
-                    What is the Slab?
-                  </h4>
-                  <div className="text-sm text-gray-300 space-y-2">
-                    <p>The <span className="text-purple-400 font-semibold">Slab</span> is a <span className="text-white">128KB on-chain account</span> that acts as a high-performance orderbook on Solana.</p>
-                    <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
-                      <div className="bg-black/30 rounded-lg p-2">
-                        <div className="text-gray-400">Accounts</div>
-                        <div className="text-white font-semibold">50 users</div>
-          </div>
-                      <div className="bg-black/30 rounded-lg p-2">
-                        <div className="text-gray-400">Orders</div>
-                        <div className="text-white font-semibold">300 active</div>
-        </div>
-                      <div className="bg-black/30 rounded-lg p-2">
-                        <div className="text-gray-400">Positions</div>
-                        <div className="text-white font-semibold">100 open</div>
-                      </div>
-                      <div className="bg-black/30 rounded-lg p-2">
-                        <div className="text-gray-400">Rent Cost</div>
-                        <div className="text-green-400 font-semibold">~0.5 SOL</div>
-                      </div>
-                    </div>
-            </div>
-          </div>
-          
-                {/* Reserve & Commit Flow */}
-                <div className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10 rounded-xl p-5 border border-cyan-500/20">
-                  <h4 className="text-cyan-300 font-semibold mb-3 flex items-center gap-2">
-                    <Zap className="w-4 h-4" />
-                    Two-Phase Trading
-                  </h4>
-                  <div className="space-y-3 text-sm text-gray-300">
-                    <div className="bg-black/30 rounded-lg p-3">
-                      <div className="text-blue-400 font-semibold mb-1">Phase 1: RESERVE</div>
-                      <div className="text-xs">Locks liquidity for your trade on-chain</div>
-              </div>
-                    <div className="text-center text-gray-500">↓</div>
-                    <div className="bg-black/30 rounded-lg p-3">
-                      <div className="text-green-400 font-semibold mb-1">Phase 2: COMMIT</div>
-                      <div className="text-xs">Executes the trade and updates positions</div>
-            </div>
-            </div>
-            </div>
-
-                {/* Current Status */}
-                <div className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10 rounded-xl p-5 border border-yellow-500/20">
-                  <h4 className="text-yellow-300 font-semibold mb-3 flex items-center gap-2">
-                    <Target className="w-4 h-4" />
-                    Current Status
-                  </h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="text-green-400">✅</span>
-                      <span className="text-gray-300">Trade Panel UI - <span className="text-white">Fully Working</span></span>
-              </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-green-400">✅</span>
-                      <span className="text-gray-300">Backend API - <span className="text-white">Fully Working</span></span>
-            </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-green-400">✅</span>
-                      <span className="text-gray-300">Phantom Integration - <span className="text-white">Fully Working</span></span>
-              </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-yellow-400">⚠️</span>
-                      <span className="text-gray-300">Slab Program - <span className="text-yellow-300">Deployed (needs initialization)</span></span>
-            </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-            {/* Modal Footer */}
-            <div className="px-6 py-4 bg-[#181825]/30 border-t border-[#181825] flex justify-end">
-              <button
-                onClick={() => setShowArchitecture(false)}
-                className="px-6 py-2 rounded-lg font-medium text-sm bg-purple-500/20 border border-purple-500/50 text-purple-300 hover:bg-purple-500/30 transition-all"
-              >
-                Got it!
-              </button>
-      </div>
-    </div>
-        </div>
-      )}
       </div>
     </>
-  )
-}
+  );
+};
+
+// Cross-Slab Trader Component (placeholder)
+const CrossSlabTrader = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "solana" }) => {
+  return (
+    <div className="w-full h-full bg-black/20 rounded-2xl border border-[#181825] overflow-hidden">
+      <div className="h-12 flex items-center justify-between px-4 border-b border-[#181825]">
+        <div className="flex items-center gap-2">
+          <h3 className="text-white font-semibold text-lg">Cross-Slab Router</h3>
+          <span className="text-gray-500">·</span>
+          <span className="text-sm text-purple-400">Advanced</span>
+        </div>
+      </div>
+      
+      <div className="p-4 flex items-center justify-center h-[calc(100%-3rem)]">
+        <div className="text-center">
+          <div className="text-purple-400 mb-2">⚡ Cross-Slab Router</div>
+          <div className="text-xs text-gray-500">Advanced routing coming soon</div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // Bottom Assets Bar
 const AssetsBar = () => {
@@ -2550,11 +816,46 @@ export default function TradingDashboard() {
   const [toasts, setToasts] = useState<Array<{ id: string; message: string; type: 'success' | 'error' | 'warning' | 'info' }>>([]);
   const [mounted, setMounted] = useState(false);
   const [tradingMode, setTradingMode] = useState<"simple" | "advanced">("simple");
+  const [portfolio, setPortfolio] = useState<any>(null);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
+  const [depositAmount, setDepositAmount] = useState("");
+  const [showDepositModal, setShowDepositModal] = useState(false);
 
   // Fix hydration error - only render wallet button after mount
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Fetch portfolio when wallet connects
+  useEffect(() => {
+    const fetchPortfolio = async () => {
+      if (!connected || !publicKey) {
+        setPortfolio(null);
+        return;
+      }
+
+      setPortfolioLoading(true);
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+        const response = await fetch(`${API_URL}/api/router/portfolio/${publicKey.toBase58()}`);
+        const data = await response.json();
+        
+        if (data.success) {
+          setPortfolio(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch portfolio:', error);
+      } finally {
+        setPortfolioLoading(false);
+      }
+    };
+
+    fetchPortfolio();
+    
+    // Refresh portfolio every 10 seconds
+    const interval = setInterval(fetchPortfolio, 10000);
+    return () => clearInterval(interval);
+  }, [connected, publicKey]);
 
   const showToast = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') => {
     const id = Date.now().toString();
@@ -2579,6 +880,100 @@ export default function TradingDashboard() {
   
   const selectedSymbol = getSymbolFromCoin(selectedCoin);
 
+  const handleDeposit = async () => {
+    if (!connected || !publicKey || !wallet.signTransaction) {
+      showToast('Connect wallet first', 'warning');
+      return;
+    }
+
+    if (!depositAmount || parseFloat(depositAmount) <= 0) {
+      showToast('Enter a valid deposit amount', 'warning');
+      return;
+    }
+
+    setPortfolioLoading(true);
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+      
+      console.log(`Depositing ${depositAmount} SOL to portfolio...`);
+      
+      const response = await fetch(`${API_URL}/api/router/deposit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          wallet: publicKey.toBase58(),
+          amount: depositAmount,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        showToast(result.error || 'Deposit failed', 'error');
+        setPortfolioLoading(false);
+        return;
+      }
+
+      // Sign and submit transaction
+      if (result.needsSigning && result.transaction) {
+        try {
+          const txBuffer = Buffer.from(result.transaction, 'base64');
+          const transaction = Transaction.from(txBuffer);
+          
+          // Get fresh blockhash
+          const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
+          const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
+          transaction.recentBlockhash = blockhash;
+          transaction.lastValidBlockHeight = lastValidBlockHeight;
+          
+          const signedTx = await wallet.signTransaction(transaction);
+          
+          console.log('📡 Submitting deposit transaction...');
+          const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+            skipPreflight: false,
+            preflightCommitment: 'confirmed'
+          });
+          
+          console.log('⏳ Confirming deposit...');
+          await connection.confirmTransaction({
+            signature,
+            blockhash,
+            lastValidBlockHeight
+          }, 'confirmed');
+          
+          console.log('Deposit confirmed!', signature);
+          showToast(
+            `Deposited ${depositAmount} SOL!\n\n` +
+            `Portfolio created at:\n${result.portfolioAddress.slice(0, 8)}...${result.portfolioAddress.slice(-8)}\n\n` +
+            `View on Solscan`,
+            'success'
+          );
+          
+          setDepositAmount("");
+          setShowDepositModal(false);
+          
+          // Refresh portfolio
+          setTimeout(async () => {
+            const portfolioResponse = await fetch(`${API_URL}/api/router/portfolio/${publicKey.toBase58()}`);
+            const portfolioData = await portfolioResponse.json();
+            if (portfolioData.success) {
+              setPortfolio(portfolioData);
+            }
+          }, 2000);
+          
+        } catch (error: any) {
+          console.error('Deposit transaction failed:', error);
+          showToast(`Deposit failed: ${error.message}`, 'error');
+        }
+      }
+    } catch (error: any) {
+      console.error('Deposit failed:', error);
+      showToast(`Deposit failed: ${error.message}`, 'error');
+    } finally {
+      setPortfolioLoading(false);
+    }
+  };
+
   const handleFaucetRequest = async () => {
     if (!publicKey) return;
     setFaucetLoading(true);
@@ -2599,7 +994,7 @@ export default function TradingDashboard() {
         setTimeout(() => setShowFaucetSuccess(false), 5000);
         
         showToast(
-          `✅ You received ${result.amount} SOL!\n` +
+          `You received ${result.amount} SOL!\n` +
           `New balance: ${result.balance_after?.toFixed(4)} SOL`,
           'success'
         );
@@ -2607,16 +1002,16 @@ export default function TradingDashboard() {
         // Show error with helpful message
         if (result.error?.includes('rate limit') || result.error?.includes('limit')) {
           showToast(
-            `⏰ Airdrop rate limit reached\n\n` +
+            `Airdrop rate limit reached\n\n` +
             `Please wait 1 minute and try again, or use:\n` +
-            `🌐 https://faucet.solana.com`,
+            `https://faucet.solana.com`,
             'warning'
           );
         } else if (result.error?.includes('RPC') || result.error?.includes('not available')) {
           showToast(
-            `⚠️ Solana RPC temporarily unavailable\n\n` +
+            `Solana RPC temporarily unavailable\n\n` +
             `Use web faucet instead:\n` +
-            `🌐 https://faucet.solana.com`,
+            `https://faucet.solana.com`,
             'warning'
           );
         } else {
@@ -2627,10 +1022,9 @@ export default function TradingDashboard() {
         }
       }
     } catch (error: any) {
-      console.error('Faucet error:', error);
       showToast(
-        `Cannot connect to faucet\n\n` +
-        `Use web faucet: https://faucet.solana.com`,
+        `Airdrop failed: ${error.message}\n\n` +
+        `Try the web faucet: https://faucet.solana.com`,
         'error'
       );
     } finally {
@@ -2638,104 +1032,147 @@ export default function TradingDashboard() {
     }
   };
 
+  if (!mounted) return null;
+
   return (
-    <div className="relative min-h-screen bg-black overflow-hidden"> 
-      {/* Toast Notifications */}
+    <div className="min-h-screen bg-black text-white">
       <ToastContainer toasts={toasts} onClose={closeToast} />
       
-      <Particles
-        className="absolute inset-0 z-10"
-        quantity={30}
-        color="#B8B8FF"
-        size={0.6}
-        staticity={30}
-        ease={80}
-      />
-      
-      <main className="relative z-10 p-4 space-y-3">
-        
-        {/* Top Header Bar - Wallet & Faucet */}
+      <main className="container mx-auto px-4 py-6 space-y-6">
+        {/* Header */}
         <div className="flex items-center justify-between">
-          {/* Left - Faucet (smaller) */}
-          {connected && (
-            <motion.div
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="flex items-center gap-2 bg-gradient-to-r from-amber-900/20 to-yellow-900/10 border border-amber-500/20 rounded-md px-2 py-1"
-            >
-              <DollarSign className="w-3 h-3 text-amber-400" />
-              <span className="text-[10px] text-amber-400 font-medium">Devnet</span>
+          <div className="flex items-center gap-4">
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-[#B8B8FF] to-purple-400 bg-clip-text text-transparent">
+              Percolator
+            </h1>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+              <span className="text-sm text-green-400">Live</span>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            {/* Portfolio Balance Display */}
+            {connected && portfolio && portfolio.exists && (
+              <div className="px-4 py-2 bg-green-500/10 border border-green-500/30 rounded-lg">
+                <div className="text-xs text-green-300 font-semibold">Portfolio Balance</div>
+                <div className="text-sm text-white font-bold">{portfolio.collateral?.toFixed(4) || '0.0000'} SOL</div>
+              </div>
+            )}
+
+            {/* Deposit Button */}
+            {connected && publicKey && (
+              <button
+                onClick={() => setShowDepositModal(true)}
+                className="px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 rounded-lg text-purple-400 text-sm font-medium transition-all"
+              >
+                Deposit Collateral
+              </button>
+            )}
+
+            {mounted && (
+              <WalletMultiButton className="!bg-[#B8B8FF]/20 !border-[#B8B8FF]/50 !text-[#B8B8FF] hover:!bg-[#B8B8FF]/30" />
+            )}
+            
+            {connected && publicKey && (
               <button
                 onClick={handleFaucetRequest}
                 disabled={faucetLoading}
-                className="px-2 py-0.5 bg-amber-500/20 border border-amber-500/40 rounded text-amber-300 text-[10px] font-semibold hover:bg-amber-500/30 transition-all disabled:opacity-50 flex items-center gap-1"
+                className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 rounded-lg text-blue-400 text-sm font-medium transition-all disabled:opacity-50"
               >
                 {faucetLoading ? (
-                  <>
-                    <span className="animate-spin">⏳</span>
-                    <span>...</span>
-                  </>
-                ) : showFaucetSuccess ? (
-                  <>
-                    <span>✅</span>
-                    <span>+2 SOL</span>
-                  </>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                    Requesting...
+                  </div>
                 ) : (
-                  <>
-                    <Zap className="w-2.5 h-2.5" />
-                    <span>+2 SOL</span>
-                  </>
+                  'Get SOL'
                 )}
               </button>
-            </motion.div>
-          )}
-          
-          {/* Right - Phantom Wallet */}
-          <div className="wallet-adapter-button-trigger-wrapper ml-auto">
-            {mounted ? (
-              <WalletMultiButton style={{ 
-                height: '32px',
-                fontSize: '12px',
-                padding: '0 16px',
-                backgroundColor: 'rgba(184, 184, 255, 0.15)',
-                border: '1px solid rgba(184, 184, 255, 0.4)',
-                borderRadius: '8px'
-              }} />
-            ) : (
-              <div style={{ 
-                height: '32px',
-                fontSize: '12px',
-                padding: '0 16px',
-                backgroundColor: 'rgba(184, 184, 255, 0.1)',
-                border: '1px solid rgba(184, 184, 255, 0.3)',
-                borderRadius: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                color: '#B8B8FF'
-              }}>
-                Loading...
-              </div>
             )}
           </div>
         </div>
-        
+
+        {/* Portfolio Visual Section */}
+        {connected && portfolio && portfolio.exists && (
+          <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-purple-500/30 rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-white mb-1">Your Portfolio</h3>
+                <p className="text-xs text-gray-400">Router-managed cross-margin account</p>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-gray-400 mb-1">Health</div>
+                <div className="text-2xl font-bold text-green-400">{portfolio.health || 100}%</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-4 gap-4">
+              {/* Total Equity */}
+              <div className="bg-black/20 rounded-xl p-4 border border-[#181825]">
+                <div className="text-xs text-gray-400 mb-2">Total Equity</div>
+                <div className="text-xl font-bold text-white">{portfolio.equity?.toFixed(4) || '0.0000'}</div>
+                <div className="text-xs text-gray-500">SOL</div>
+              </div>
+
+              {/* Collateral */}
+              <div className="bg-black/20 rounded-xl p-4 border border-[#181825]">
+                <div className="text-xs text-gray-400 mb-2">Collateral</div>
+                <div className="text-xl font-bold text-blue-400">{portfolio.collateral?.toFixed(4) || '0.0000'}</div>
+                <div className="text-xs text-gray-500">SOL</div>
+              </div>
+
+              {/* Free Collateral */}
+              <div className="bg-black/20 rounded-xl p-4 border border-[#181825]">
+                <div className="text-xs text-gray-400 mb-2">Available</div>
+                <div className="text-xl font-bold text-green-400">{portfolio.free_collateral?.toFixed(4) || '0.0000'}</div>
+                <div className="text-xs text-gray-500">SOL</div>
+              </div>
+
+              {/* Leverage */}
+              <div className="bg-black/20 rounded-xl p-4 border border-[#181825]">
+                <div className="text-xs text-gray-400 mb-2">Leverage</div>
+                <div className="text-xl font-bold text-purple-400">{portfolio.leverage?.toFixed(2) || '1.00'}x</div>
+                <div className="text-xs text-gray-500">Cross-margin</div>
+              </div>
+            </div>
+
+            {/* Portfolio Address */}
+            <div className="mt-4 flex items-center justify-between bg-black/20 rounded-lg p-3 border border-[#181825]">
+              <div>
+                <div className="text-xs text-gray-400 mb-1">Portfolio Account (PDA)</div>
+                <div className="text-xs text-gray-300 font-mono">{portfolio.portfolioAddress}</div>
+              </div>
+              <a
+                href={`https://explorer.solana.com/address/${portfolio.portfolioAddress}?cluster=devnet`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-blue-400 hover:text-blue-300"
+              >
+                View on Explorer
+              </a>
+            </div>
+          </div>
+        )}
+
         {/* Trading Mode Toggle */}
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setTradingMode("simple")}
             className={cn(
               "px-4 py-2 rounded-lg text-sm font-medium transition-all",
               tradingMode === "simple"
-                ? "bg-blue-500/20 border-2 border-blue-500/50 text-blue-300"
+                ? "bg-[#B8B8FF]/20 text-[#B8B8FF] border border-[#B8B8FF]/50"
                 : "bg-[#181825] border border-[#181825] text-gray-400 hover:text-white"
             )}
           >
+            <Target className="w-4 h-4" />
             Simple Trading
           </button>
           <button
             onClick={() => setTradingMode("advanced")}
             className={cn(
-              "px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2",
+              "px-4 py-2 rounded-lg text-sm font-medium transition-all",
               tradingMode === "advanced"
                 ? "bg-purple-500/20 border-2 border-purple-500/50 text-purple-300"
                 : "bg-[#181825] border border-[#181825] text-gray-400 hover:text-white"
@@ -2748,13 +1185,9 @@ export default function TradingDashboard() {
 
         {/* Main Trading Interface */}
         <div className="grid grid-cols-12 gap-4 h-[calc(100vh-180px)]">
-          {/* Left Sidebar - Order Form */}
-          <div className="col-span-3">
-            {tradingMode === "simple" ? (
-              <OrderForm selectedCoin={selectedCoin} />
-            ) : (
-              <CrossSlabTrader selectedCoin={selectedCoin} />
-            )}
+          {/* Left Sidebar - Order Book */}
+          <div className="col-span-3 space-y-4">
+            <OrderBook symbol={selectedSymbol} />
           </div>
 
           {/* Center - Chart */}
@@ -2766,16 +1199,109 @@ export default function TradingDashboard() {
             />
           </div>
 
-          {/* Right Sidebar - Order Book & Past Trades */}
-          <div className="col-span-3 space-y-4">
-            <OrderBook symbol={selectedSymbol} />
-            <PastTrades symbol={selectedSymbol} />
+          {/* Right Sidebar - Trade Panel */}
+          <div className="col-span-3">
+            {tradingMode === "simple" ? (
+              <OrderForm selectedCoin={selectedCoin} />
+            ) : (
+              <CrossSlabTrader selectedCoin={selectedCoin} />
+            )}
           </div>
         </div>
 
         {/* Bottom Assets Bar */}
         <AssetsBar />
       </main>
+
+      {/* Deposit Modal */}
+      {showDepositModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0a0a0f] border border-[#181825] rounded-2xl p-6 max-w-md w-full">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-white">Deposit Collateral</h3>
+              <button
+                onClick={() => setShowDepositModal(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Info Box */}
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                <div className="text-sm text-blue-300 mb-2">
+                  <strong>Router Architecture</strong>
+                </div>
+                <div className="text-xs text-gray-400">
+                  Depositing SOL creates your trading portfolio on the Router program.
+                  This enables cross-margin trading across all slabs!
+                </div>
+              </div>
+
+              {/* Portfolio Status */}
+              {portfolio && !portfolio.exists && (
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+                  <div className="text-xs text-yellow-300">
+                    Portfolio will be created with your first deposit
+                  </div>
+                </div>
+              )}
+
+              {portfolio && portfolio.exists && (
+                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                  <div className="text-xs text-green-300 mb-1">Current Balance</div>
+                  <div className="text-lg text-white font-bold">{portfolio.collateral?.toFixed(4)} SOL</div>
+                </div>
+              )}
+
+              {/* Amount Input */}
+              <div className="space-y-2">
+                <label className="text-sm text-gray-400 font-medium">Amount (SOL)</label>
+                <input
+                  type="number"
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  placeholder="0.00"
+                  step="0.01"
+                  min="0.01"
+                  className="w-full bg-[#181825] border border-[#282835] rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none"
+                />
+                <div className="flex items-center justify-between text-xs text-gray-400">
+                  <span>Minimum: 0.01 SOL</span>
+                  <button
+                    onClick={() => setDepositAmount("1")}
+                    className="text-purple-400 hover:text-purple-300"
+                  >
+                    Set 1 SOL
+                  </button>
+                </div>
+              </div>
+
+              {/* Deposit Button */}
+              <button
+                onClick={handleDeposit}
+                disabled={portfolioLoading || !depositAmount || parseFloat(depositAmount) <= 0}
+                className="w-full bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-400 font-bold py-3 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {portfolioLoading ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                    Processing...
+                  </div>
+                ) : (
+                  `Deposit ${depositAmount || '0'} SOL`
+                )}
+              </button>
+
+              {/* Info */}
+              <div className="text-xs text-gray-500 text-center">
+                Network fee: ~0.000005 SOL
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

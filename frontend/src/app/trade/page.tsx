@@ -1,0 +1,498 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { useWallet } from "@solana/wallet-adapter-react"
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui"
+import { Transaction, Connection, clusterApiUrl } from "@solana/web3.js"
+import { Buffer } from "buffer"
+import { Particles } from "@/components/ui/particles"
+import { cn } from "@/lib/utils"
+import Link from "next/link"
+import { ArrowLeft, TrendingUp, TrendingDown, Zap, Wallet as WalletIcon } from "lucide-react"
+
+export default function SimpleTradePage() {
+  const { publicKey, connected, signTransaction } = useWallet()
+  const [mounted, setMounted] = useState(false)
+  const [side, setSide] = useState<'buy' | 'sell'>('buy')
+  const [price, setPrice] = useState('3900')
+  const [amount, setAmount] = useState('1.0')
+  const [submitting, setSubmitting] = useState(false)
+  const [lastHoldId, setLastHoldId] = useState<number | null>(null)
+  const [mode, setMode] = useState<'reserve' | 'commit'>('reserve')
+  
+  // Order book state for YOUR Slab account
+  const [orderbook, setOrderbook] = useState<any>(null)
+  const [balance, setBalance] = useState<number>(0)
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Fetch YOUR Slab's order book (LIVE from blockchain!)
+  useEffect(() => {
+    const fetchOrderbook = async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
+        console.log('📖 Fetching LIVE order book from Slab account...')
+        const response = await fetch(`${API_URL}/api/slab-live/orderbook`)
+        const data = await response.json()
+        
+        if (data.success) {
+          console.log(`✅ Slab account: ${data.slabAccount}`)
+          console.log(`   Size: ${data.accountSize} bytes`)
+          console.log(`   Orders: ${data.orderbook.bids.length} bids, ${data.orderbook.asks.length} asks`)
+          
+          setOrderbook(data.orderbook)
+          setLastUpdate(new Date())
+        }
+      } catch (error) {
+        console.error('Failed to fetch orderbook:', error)
+      }
+    }
+
+    fetchOrderbook()
+    const interval = setInterval(fetchOrderbook, 5000) // Update every 5s from blockchain
+    return () => clearInterval(interval)
+  }, [])
+
+  // Fetch balance
+  useEffect(() => {
+    if (!connected || !publicKey) return
+
+    const fetchBalance = async () => {
+      try {
+        const connection = new Connection(clusterApiUrl('devnet'), 'confirmed')
+        const bal = await connection.getBalance(publicKey)
+        setBalance(bal / 1e9)
+      } catch (error) {
+        console.error('Failed to fetch balance:', error)
+      }
+    }
+
+    fetchBalance()
+    const interval = setInterval(fetchBalance, 10000)
+    return () => clearInterval(interval)
+  }, [connected, publicKey])
+
+  const handleTrade = async () => {
+    if (!connected || !publicKey || !signTransaction) {
+      alert('Connect wallet first')
+      return
+    }
+
+    if (!price || !amount) {
+      alert('Enter price and amount')
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
+      
+      if (mode === 'reserve') {
+        // RESERVE
+        const response = await fetch(`${API_URL}/api/trade/reserve`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user: publicKey.toBase58(),
+            instrument: 0, // ETH
+            side: side,
+            price: parseFloat(price),
+            quantity: parseFloat(amount)
+          })
+        })
+
+        const result = await response.json()
+        
+        if (!result.success) {
+          alert(`Error: ${result.error}`)
+          setSubmitting(false)
+          return
+        }
+
+        if (result.needsSigning && result.transaction) {
+          const txBuffer = Buffer.from(result.transaction, 'base64')
+          const transaction = Transaction.from(txBuffer)
+          const signedTx = await signTransaction(transaction)
+          
+          const connection = new Connection(clusterApiUrl('devnet'), 'confirmed')
+          const signature = await connection.sendRawTransaction(signedTx.serialize())
+          await connection.confirmTransaction(signature, 'confirmed')
+          
+          setLastHoldId(result.holdId)
+          setMode('commit')
+          alert(`✅ Reserved!\nHold ID: ${result.holdId}\n\nView on Solscan:\nhttps://solscan.io/tx/${signature}?cluster=devnet`)
+        }
+      } else {
+        // COMMIT
+        if (!lastHoldId) {
+          alert('Reserve first')
+          setSubmitting(false)
+          return
+        }
+
+        const response = await fetch(`${API_URL}/api/trade/commit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user: publicKey.toBase58(),
+            holdId: lastHoldId
+          })
+        })
+
+        const result = await response.json()
+        
+        if (!result.success) {
+          alert(`Error: ${result.error}`)
+          setSubmitting(false)
+          return
+        }
+
+        if (result.needsSigning && result.transaction) {
+          const txBuffer = Buffer.from(result.transaction, 'base64')
+          const transaction = Transaction.from(txBuffer)
+          const signedTx = await signTransaction(transaction)
+          
+          const connection = new Connection(clusterApiUrl('devnet'), 'confirmed')
+          const signature = await connection.sendRawTransaction(signedTx.serialize())
+          await connection.confirmTransaction(signature, 'confirmed')
+          
+          alert(`✅ Trade Executed!\n${side.toUpperCase()} ${amount} ETH @ ${price}\n\nView on Solscan:\nhttps://solscan.io/tx/${signature}?cluster=devnet`)
+          
+          setPrice('')
+          setAmount('')
+          setLastHoldId(null)
+          setMode('reserve')
+        }
+      }
+    } catch (error: any) {
+      console.error('Trade failed:', error)
+      alert(`Trade failed: ${error.message}`)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const total = (parseFloat(price || '0') * parseFloat(amount || '0')).toFixed(2)
+
+  if (!mounted) return null
+
+  return (
+    <div className="relative min-h-screen bg-gradient-to-b from-black via-zinc-950 to-black text-white overflow-hidden">
+      {/* Starry Background */}
+      <Particles 
+        className="absolute inset-0 z-0" 
+        quantity={100}
+        color="#ffffff"
+        size={0.4}
+        staticity={50}
+        ease={50}
+      />
+      
+      {/* Header */}
+      <div className="relative z-10 border-b border-zinc-800 bg-black/50 backdrop-blur-md">
+        <div className="max-w-[1600px] mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <Link href="/dashboard">
+                <button className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-all">
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+              </Link>
+              <div>
+                <h1 className="text-2xl font-bold">Percolator Trade</h1>
+                <p className="text-sm text-zinc-400">ETH/USDC · Devnet</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-3">
+              <Link href="/portfolio">
+                <button className="px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center space-x-2 transition-all">
+                  <WalletIcon className="w-4 h-4" />
+                  <span>Portfolio</span>
+                </button>
+              </Link>
+              <Link href="/v0">
+                <button className="px-4 py-2 rounded-lg bg-green-600/20 hover:bg-green-600/30 border border-green-500/50 text-green-400 text-sm font-bold transition-all">
+                  v0 POC
+                </button>
+              </Link>
+              {mounted && <WalletMultiButton />}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="relative z-10 max-w-[1600px] mx-auto px-6 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* LEFT: Your Slab's Order Book (2/3 width) */}
+          <div className="lg:col-span-2">
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 backdrop-blur-sm">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-bold">Order Book</h3>
+                  <p className="text-xs text-zinc-500 mt-1">ETH/USDC · Your Slab Pool</p>
+                </div>
+                
+                <div className="text-xs text-zinc-500">
+                  Updated: {lastUpdate.toLocaleTimeString()}
+                </div>
+              </div>
+
+              {/* Asks (Sell Orders) */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between text-xs text-zinc-500 font-semibold mb-2 px-3">
+                  <span>Price (USDC)</span>
+                  <span>Size (ETH)</span>
+                  <span>Total (USDC)</span>
+                </div>
+                <div className="space-y-0.5">
+                  {orderbook?.asks?.slice(0, 10).reverse().map((ask: any, i: number) => (
+                    <div 
+                      key={i} 
+                      className="flex items-center justify-between text-sm px-3 py-1.5 hover:bg-red-500/10 rounded transition-colors group cursor-pointer"
+                      onClick={() => setPrice(ask.price.toFixed(2))}
+                    >
+                      <span className="text-red-400 font-mono font-semibold group-hover:text-red-300">
+                        ${ask.price.toFixed(2)}
+                      </span>
+                      <span className="text-zinc-400">{ask.quantity.toFixed(4)}</span>
+                      <span className="text-zinc-500">${(ask.price * ask.quantity).toFixed(2)}</span>
+                    </div>
+                  )) || (
+                    <div className="text-center text-zinc-600 py-8 border border-zinc-800 rounded-lg">
+                      No sell orders
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Mid Price */}
+              <div className="my-6 py-4 bg-zinc-800/50 border border-zinc-700 rounded-lg text-center">
+                <div className="text-3xl font-bold text-white mb-1">
+                  ${orderbook?.midPrice?.toFixed(2) || '0.00'}
+                </div>
+                <div className="text-xs text-zinc-500">Mid Price · Spread: {orderbook?.spread?.toFixed(4) || '0'}%</div>
+              </div>
+
+              {/* Bids (Buy Orders) */}
+              <div>
+                <div className="space-y-0.5">
+                  {orderbook?.bids?.slice(0, 10).map((bid: any, i: number) => (
+                    <div 
+                      key={i} 
+                      className="flex items-center justify-between text-sm px-3 py-1.5 hover:bg-green-500/10 rounded transition-colors group cursor-pointer"
+                      onClick={() => setPrice(bid.price.toFixed(2))}
+                    >
+                      <span className="text-green-400 font-mono font-semibold group-hover:text-green-300">
+                        ${bid.price.toFixed(2)}
+                      </span>
+                      <span className="text-zinc-400">{bid.quantity.toFixed(4)}</span>
+                      <span className="text-zinc-500">${(bid.price * bid.quantity).toFixed(2)}</span>
+                    </div>
+                  )) || (
+                    <div className="text-center text-zinc-600 py-8 border border-zinc-800 rounded-lg">
+                      No buy orders
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Pool Info */}
+              <div className="mt-6 p-4 bg-blue-600/10 border border-blue-500/30 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm text-blue-300 font-semibold">
+                    🏊 Your Slab Pool (On-Chain)
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <span className="text-xs text-green-400">Live from Blockchain</span>
+                  </div>
+                </div>
+                <div className="text-xs text-zinc-400 font-mono mb-2">
+                  79DUPoYSvfrsHTGHUZDtb98vGA5tzKUAVQyYSxsVX8fk
+                </div>
+                {(!orderbook || (orderbook.bids?.length === 0 && orderbook.asks?.length === 0)) && (
+                  <div className="text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/30 rounded px-2 py-1 mb-2">
+                    ✨ Fresh pool! Be the first to place an order.
+                  </div>
+                )}
+                <a
+                  href="https://explorer.solana.com/address/79DUPoYSvfrsHTGHUZDtb98vGA5tzKUAVQyYSxsVX8fk?cluster=devnet"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-400 hover:text-blue-300 inline-block"
+                >
+                  View on Solana Explorer →
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT: Trade Panel (1/3 width) */}
+          <div className="lg:col-span-1">
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 backdrop-blur-sm sticky top-6">
+              <h3 className="text-xl font-bold mb-4">Place Order</h3>
+
+              {/* Buy/Sell Tabs */}
+              <div className="flex gap-2 mb-6">
+                <button
+                  onClick={() => setSide('buy')}
+                  className={cn(
+                    "flex-1 py-3 rounded-lg font-bold transition-all",
+                    side === 'buy'
+                      ? "bg-green-600 text-white shadow-lg shadow-green-900/50"
+                      : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+                  )}
+                >
+                  BUY
+                </button>
+                <button
+                  onClick={() => setSide('sell')}
+                  className={cn(
+                    "flex-1 py-3 rounded-lg font-bold transition-all",
+                    side === 'sell'
+                      ? "bg-red-600 text-white shadow-lg shadow-red-900/50"
+                      : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+                  )}
+                >
+                  SELL
+                </button>
+              </div>
+
+              {/* Price Input */}
+              <div className="mb-4">
+                <label className="block text-sm mb-2 text-zinc-400 font-semibold">
+                  Price (USDC)
+                </label>
+                <input
+                  type="number"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  placeholder="3900"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-zinc-500 transition-colors"
+                />
+              </div>
+
+              {/* Amount Input */}
+              <div className="mb-4">
+                <label className="block text-sm mb-2 text-zinc-400 font-semibold">
+                  Amount (ETH)
+                </label>
+                <input
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="1.0"
+                  step="0.1"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-zinc-500 transition-colors"
+                />
+              </div>
+
+              {/* Total */}
+              <div className="mb-6 p-4 bg-zinc-800/50 rounded-lg border border-zinc-700">
+                <div className="text-xs text-zinc-500 mb-1">TOTAL</div>
+                <div className="text-2xl font-bold text-white">${total}</div>
+              </div>
+
+              {/* Wallet Balance */}
+              <div className="mb-6 flex items-center justify-between text-sm">
+                <span className="text-zinc-500">Wallet balance (devnet)</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-white font-mono">
+                    {connected ? `${balance.toFixed(2)} SOL` : '--'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Trade Button */}
+              {!connected ? (
+                <div className="w-full py-4 font-bold text-white border border-zinc-800 bg-zinc-900 hover:border-zinc-600 transition-colors rounded-lg flex items-center justify-center">
+                  {mounted ? <WalletMultiButton /> : 'Loading...'}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {mode === 'reserve' ? (
+                    <button
+                      onClick={handleTrade}
+                      disabled={submitting || !price || !amount}
+                      className={cn(
+                        "w-full py-4 rounded-lg font-bold transition-all disabled:opacity-50",
+                        side === 'buy'
+                          ? "bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-900/50"
+                          : "bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-900/50"
+                      )}
+                    >
+                      {submitting ? (
+                        <span className="flex items-center justify-center space-x-2">
+                          <span className="animate-spin">⏳</span>
+                          <span>Processing...</span>
+                        </span>
+                      ) : (
+                        `${side.toUpperCase()} ${amount || '0'} ETH`
+                      )}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleTrade}
+                      disabled={submitting || !lastHoldId}
+                      className="w-full py-4 rounded-lg font-bold bg-blue-600 hover:bg-blue-700 text-white transition-all disabled:opacity-50 shadow-lg shadow-blue-900/50"
+                    >
+                      {submitting ? 'Committing...' : `✅ COMMIT TRADE (Hold #${lastHoldId})`}
+                    </button>
+                  )}
+                  
+                  {mode === 'commit' && (
+                    <button
+                      onClick={() => {
+                        setMode('reserve')
+                        setLastHoldId(null)
+                      }}
+                      className="w-full py-2 rounded-lg border border-zinc-700 text-zinc-400 hover:bg-zinc-800 transition-all text-sm"
+                    >
+                      Cancel & New Order
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Info */}
+              <div className="mt-6 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                <div className="text-xs text-blue-300 font-semibold mb-1">
+                  {mode === 'reserve' ? '🔒 Step 1: Reserve' : '✅ Step 2: Commit'}
+                </div>
+                <div className="text-xs text-zinc-400">
+                  {mode === 'reserve' 
+                    ? 'Lock liquidity on Slab Program'
+                    : 'Execute your reserved trade'
+                  }
+                </div>
+              </div>
+
+              {/* Program Info */}
+              <div className="mt-4 p-3 bg-zinc-800/30 rounded-lg border border-zinc-700/50">
+                <div className="text-xs text-zinc-500 mb-1">Slab Account</div>
+                <div className="text-xs font-mono text-zinc-400">
+                  79DU...X8fk
+                </div>
+                <a
+                  href="https://explorer.solana.com/address/79DUPoYSvfrsHTGHUZDtb98vGA5tzKUAVQyYSxsVX8fk?cluster=devnet"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-400 hover:text-blue-300 mt-1 inline-block"
+                >
+                  View on Explorer →
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+

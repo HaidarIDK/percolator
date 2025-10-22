@@ -2,7 +2,6 @@
 
 use pinocchio::{
     account_info::AccountInfo,
-    entrypoint,
     msg,
     pubkey::Pubkey,
     ProgramResult,
@@ -11,8 +10,6 @@ use pinocchio::{
 use crate::instructions::RouterInstruction;
 use crate::state::{Vault, Portfolio, SlabRegistry};
 use percolator_common::*;
-
-entrypoint!(process_instruction);
 
 pub fn process_instruction(
     program_id: &Pubkey,

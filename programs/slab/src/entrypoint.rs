@@ -2,7 +2,6 @@
 
 use pinocchio::{
     account_info::AccountInfo,
-    entrypoint,
     msg,
     pubkey::Pubkey,
     ProgramResult,
@@ -18,8 +17,6 @@ use crate::instructions::{
 use crate::matching::funding::{update_funding, update_all_funding};
 use crate::state::{SlabState, SlabHeader};
 use percolator_common::*;
-
-entrypoint!(process_instruction);
 
 // ========== Helper Functions ==========
 
@@ -188,6 +185,7 @@ pub fn process_instruction(
 /// - commitment_hash ([u8; 32]): Hash for commit-reveal
 /// - route_id (u64): Router route identifier
 fn handle_reserve(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
+    msg!("Reserve: Starting");
     // Validate account count
     if accounts.is_empty() {
         msg!("Error: Reserve instruction requires at least 1 account");
@@ -195,12 +193,17 @@ fn handle_reserve(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) ->
     }
 
     // Account 0: Slab state (must be writable and owned by this program)
+    msg!("Reserve: Validating slab account");
     let slab_account = &accounts[0];
     validate_owner(slab_account, program_id)?;
+    msg!("Reserve: Owner validated");
     validate_writable(slab_account)?;
+    msg!("Reserve: Writable validated");
 
     // Deserialize slab state
+    msg!("Reserve: Deserializing slab");
     let slab = unsafe { borrow_account_data_mut::<SlabState>(slab_account)? };
+    msg!("Reserve: Slab deserialized");
 
     // Parse instruction data
     // Total size: 4 + 2 + 1 + 8 + 8 + 8 + 32 + 8 = 71 bytes
@@ -379,6 +382,7 @@ fn handle_batch_open(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8])
 /// - batch_ms (u64): Batch window duration in milliseconds
 /// - freeze_levels (u16): Number of top price levels to freeze
 fn handle_initialize(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
+    msg!("Init: Checking accounts");
     if accounts.len() < 2 {
         msg!("Error: Initialize instruction requires at least 2 accounts");
         return Err(PercolatorError::InvalidInstruction.into());
@@ -387,9 +391,13 @@ fn handle_initialize(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8])
     let slab_account = &accounts[0];
     let authority_account = &accounts[1];
 
+    msg!("Init: Validating owner");
     validate_owner(slab_account, program_id)?;
+    msg!("Init: Validating writable");
     validate_writable(slab_account)?;
+    msg!("Init: Validating signer");
     validate_signer(authority_account)?;
+    msg!("Init: Validation complete");
 
     // Parse instruction data (32 + 32 + 32 + 2 + 2 + 2 + 2 + 8 + 2 = 114 bytes minimum)
     if data.len() < 114 {

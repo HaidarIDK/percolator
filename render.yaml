@@ -1,0 +1,51 @@
+# Render.com Deployment Configuration
+# This file deploys BOTH backend and frontend
+
+services:
+  # Backend API Service
+  - type: web
+    name: percolator-api
+    env: node
+    region: oregon  # Change to your preferred region
+    plan: free
+    rootDir: api
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: HOST
+        value: 0.0.0.0
+      - key: SOLANA_NETWORK
+        value: devnet
+      - key: SOLANA_RPC_URL
+        value: https://api.devnet.solana.com
+      - key: SLAB_PROGRAM_ID
+        value: 6EF2acRfPejnxXYd9apKc2wb3p2NLG8rKgWbCfp5G7Uz
+      - key: ROUTER_PROGRAM_ID
+        value: 9CQWTSDobkHqWzvx4nufdke4C8GKuoaqiNBBLEYFoHoG
+    healthCheckPath: /api/health
+
+  # Frontend Dashboard Service
+  - type: web
+    name: percolator-frontend
+    env: node
+    region: oregon  # Same region as backend for lower latency
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      # ⚠️ UPDATE THIS after deploying backend!
+      # Replace with your actual backend URL from Render
+      - key: NEXT_PUBLIC_API_URL
+        value: https://percolator-api.onrender.com
+      - key: NEXT_PUBLIC_WS_URL
+        value: wss://percolator-api.onrender.com/ws
+

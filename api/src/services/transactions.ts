@@ -21,6 +21,11 @@ export const ROUTER_PROGRAM_ID = new PublicKey(
   process.env.ROUTER_PROGRAM_ID || '9CQWTSDobkHqWzvx4nufdke4C8GKuoaqiNBBLEYFoHoG'
 );
 
+// INITIALIZED SLAB ACCOUNT - READY FOR TRADING! 🎉
+export const SLAB_ACCOUNT = new PublicKey(
+  process.env.SLAB_ACCOUNT || '79DUPoYSvfrsHTGHUZDtb98vGA5tzKUAVQyYSxsVX8fk'
+);
+
 /**
  * Instruction discriminators
  */

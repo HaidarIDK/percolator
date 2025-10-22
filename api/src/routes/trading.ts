@@ -11,6 +11,7 @@ import {
   getRecentBlockhash,
   SLAB_PROGRAM_ID,
   ROUTER_PROGRAM_ID,
+  SLAB_ACCOUNT,
 } from '../services/transactions';
 import { logTransaction } from './monitor';
 
@@ -123,20 +124,22 @@ tradingRouter.post('/reserve', async (req, res) => {
       return res.status(400).json({ error: 'Invalid user public key' });
     }
 
-    // Get slab account from environment or use default
-    const slabAccount = new PublicKey(
-      process.env.SLAB_ACCOUNT || '11111111111111111111111111111111'
-    );
+    // Get slab account from environment or use initialized account
+    const slabAccount = SLAB_ACCOUNT;
 
     // Generate commitment secret for commit-reveal pattern
     const secret = generateSecret();
     const commitmentHash = generateCommitmentHash(secret);
 
     // Build reserve instruction
+    // POC NOTE: Using accountIdx 0 - in production this would:
+    // 1. Check if user has an account in the slab's account pool
+    // 2. Auto-create one if not (requires program modification)
+    // 3. Or use a separate "Register Account" instruction first
     const reserveIx = buildReserveInstruction({
       slabAccount,
       userAccount: userPubkey,
-      accountIdx: 0, // TODO: Get actual account index from user's portfolio
+      accountIdx: 0, // POC: Using index 0 (needs account pool modification in program)
       instrumentIdx: instrument,
       side: side as 'buy' | 'sell',
       qty: quantity,
@@ -250,9 +253,7 @@ tradingRouter.post('/commit', async (req, res) => {
     }
 
     // Get slab account
-    const slabAccount = new PublicKey(
-      process.env.SLAB_ACCOUNT || '11111111111111111111111111111111'
-    );
+    const slabAccount = SLAB_ACCOUNT;
 
     // Build commit instruction with revealed secret
     const commitIx = buildCommitInstruction({
@@ -362,9 +363,7 @@ tradingRouter.post('/multi-reserve', async (req, res) => {
 
     // TODO: Get actual cap and slab accounts
     const capAccounts: PublicKey[] = [];
-    const slabAccounts = instruments.map(() => 
-      new PublicKey(process.env.SLAB_ACCOUNT || '11111111111111111111111111111111')
-    );
+    const slabAccounts = instruments.map(() => SLAB_ACCOUNT);
 
     // Generate commitment
     const secret = generateSecret();

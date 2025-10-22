@@ -102,11 +102,12 @@ export function buildDepositInstruction(params: {
   // 1. User token account (writable) - for SOL, this is the user's wallet
   // 2. User portfolio account (writable)
   // 3. User authority (signer)
+  // NOTE: Solana deduplicates accounts, so we need to merge user wallet permissions
   const keys = [
     { pubkey: vaultPDA, isSigner: false, isWritable: true }, // Vault
-    { pubkey: userAuthority, isSigner: false, isWritable: true }, // User token/SOL account
     { pubkey: portfolioPDA, isSigner: false, isWritable: true }, // Portfolio
-    { pubkey: userAuthority, isSigner: true, isWritable: false }, // User authority
+    { pubkey: userAuthority, isSigner: true, isWritable: true }, // User authority (combined as both token account and signer)
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // System program for account creation
   ];
 
   return new TransactionInstruction({
