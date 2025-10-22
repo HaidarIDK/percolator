@@ -110,8 +110,8 @@ function safeFetchCoinGeckoData() {
   });
 }
 
-// Update prices every 30 seconds (CoinGecko rate limit)
-setInterval(safeFetchCoinGeckoData, 30000);
+// Update prices every 60 seconds (CoinGecko free tier limit)
+setInterval(safeFetchCoinGeckoData, 60000);
 
 // Initialize with real data
 safeFetchCoinGeckoData();
