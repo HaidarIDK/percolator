@@ -602,7 +602,8 @@ const CrossSlabTrader = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin
         const basePrice = getMarketPrice();
         
         // Use SDK to fetch available slabs with coin-specific pricing
-        const response = await fetch(`http://localhost:3000/api/router/slabs?coin=${selectedCoin}`);
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+        const response = await fetch(`${API_URL}/api/router/slabs?coin=${selectedCoin}`);
         const data = await response.json();
         
         // Update slabs with correct prices for the selected coin
@@ -744,7 +745,8 @@ const CrossSlabTrader = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin
       
       // ARCHITECTURE STEP 1-2: Frontend → Client SDK
       // Call backend SDK endpoint which will build the router instruction
-      const sdkResponse = await fetch('http://localhost:3000/api/router/execute-cross-slab', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+      const sdkResponse = await fetch(`${API_URL}/api/router/execute-cross-slab`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1585,7 +1587,8 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
         const symbol = getSymbol();
         if (!symbol) return; // Safety check
         
-        const response = await fetch(`http://localhost:3000/api/market/${symbol}/orderbook`);
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+        const response = await fetch(`${API_URL}/api/market/${symbol}/orderbook`);
         const data = await response.json();
         if (data.midPrice) {
           setRealPrice(data.midPrice);
@@ -1685,7 +1688,8 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
     const fetchPortfolio = async () => {
       try {
         const walletAddress = publicKey.toBase58();
-        const data = await fetch(`http://localhost:3000/api/user/${walletAddress}/portfolio`);
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+        const data = await fetch(`${API_URL}/api/user/${walletAddress}/portfolio`);
         const portfolioData = await data.json();
         setPortfolio(portfolioData);
       } catch (error) {
@@ -1740,7 +1744,8 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
       if (side === "Reserve") {
         // RESERVE FLOW
         console.log(`🔒 Step 1: Building Reserve transaction...`);
-        const reserveResponse = await fetch(`http://localhost:3000${reserveEndpoint}`, {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+        const reserveResponse = await fetch(`${API_URL}${reserveEndpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(reserveBody)
@@ -1831,7 +1836,8 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
         }
 
         console.log(`✅ Step 2: Building Commit transaction with Hold ID: ${lastHoldId}...`);
-        const commitResponse = await fetch(`http://localhost:3000/api/trade/commit`, {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+        const commitResponse = await fetch(`${API_URL}/api/trade/commit`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1929,7 +1935,7 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
   return (
     <>
       <ToastContainer toasts={toasts} onClose={closeToast} />
-      <div className="w-full h-full bg-black/20 rounded-2xl border border-[#181825] overflow-hidden">
+    <div className="w-full h-full bg-black/20 rounded-2xl border border-[#181825] overflow-hidden">
         <div className="h-10 flex items-center justify-between px-3 border-b border-[#181825]">
           <div className="flex items-center gap-2">
             <h3 className="text-white font-medium text-sm">Percolator Trade</h3>
@@ -2029,7 +2035,7 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
           <div className="bg-[#181825] rounded-lg p-3 text-center">
             <Wallet className="w-8 h-8 mx-auto mb-2 text-gray-400" />
             <p className="text-xs text-gray-400 mb-2">Connect your Phantom wallet to start trading</p>
-          </div>
+        </div>
         ) : (
           <div className="space-y-2">
             <div className="bg-[#181825] rounded-lg p-2 space-y-1">
@@ -2082,7 +2088,7 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
                 disabled={!realPrice}
               >
                 Use Mid {realPrice > 0 ? `(${realPrice.toFixed(2)})` : ''}
-              </button>
+            </button>
             )}
           </div>
         </div>
@@ -2093,10 +2099,10 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
             Amount ({getBaseCurrency()})
           </label>
           <div className="relative">
-            <input
-              type="number"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
+          <input
+            type="number"
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
               className="w-full bg-[#181825] border-2 border-[#181825] focus:border-[#B8B8FF]/50 rounded-xl px-4 py-3 text-white text-base font-medium focus:outline-none transition-colors"
               placeholder="Enter amount..."
               step="0.1"
@@ -2133,12 +2139,12 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
               )}>
                 {tradeSide.toUpperCase()} {orderType.toUpperCase()}
               </span>
-            </div>
+          </div>
             <div className="space-y-1.5">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-400">Amount:</span>
                 <span className="text-white font-medium">{parseFloat(quantity).toFixed(2)} {getBaseCurrency()}</span>
-              </div>
+        </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-400">Price:</span>
                 <span className="text-white font-medium">{parseFloat(price).toFixed(2)} {getQuoteCurrency()}</span>
@@ -2305,7 +2311,7 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
               >
                 <span className="text-2xl">×</span>
               </button>
-        </div>
+    </div>
 
             {/* Modal Body */}
             <div className="px-6 py-6 max-h-[70vh] overflow-y-auto">
@@ -2403,11 +2409,11 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
                       <div className="bg-black/30 rounded-lg p-2">
                         <div className="text-gray-400">Accounts</div>
                         <div className="text-white font-semibold">50 users</div>
-                      </div>
+          </div>
                       <div className="bg-black/30 rounded-lg p-2">
                         <div className="text-gray-400">Orders</div>
                         <div className="text-white font-semibold">300 active</div>
-                      </div>
+        </div>
                       <div className="bg-black/30 rounded-lg p-2">
                         <div className="text-gray-400">Positions</div>
                         <div className="text-white font-semibold">100 open</div>
@@ -2417,9 +2423,9 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
                         <div className="text-green-400 font-semibold">~0.5 SOL</div>
                       </div>
                     </div>
-                  </div>
-                </div>
-
+            </div>
+          </div>
+          
                 {/* Reserve & Commit Flow */}
                 <div className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10 rounded-xl p-5 border border-cyan-500/20">
                   <h4 className="text-cyan-300 font-semibold mb-3 flex items-center gap-2">
@@ -2430,14 +2436,14 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
                     <div className="bg-black/30 rounded-lg p-3">
                       <div className="text-blue-400 font-semibold mb-1">Phase 1: RESERVE</div>
                       <div className="text-xs">Locks liquidity for your trade on-chain</div>
-                    </div>
+              </div>
                     <div className="text-center text-gray-500">↓</div>
                     <div className="bg-black/30 rounded-lg p-3">
                       <div className="text-green-400 font-semibold mb-1">Phase 2: COMMIT</div>
                       <div className="text-xs">Executes the trade and updates positions</div>
-                    </div>
-                  </div>
-                </div>
+            </div>
+            </div>
+            </div>
 
                 {/* Current Status */}
                 <div className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10 rounded-xl p-5 border border-yellow-500/20">
@@ -2449,24 +2455,24 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
                     <div className="flex items-center gap-2">
                       <span className="text-green-400">✅</span>
                       <span className="text-gray-300">Trade Panel UI - <span className="text-white">Fully Working</span></span>
-                    </div>
+              </div>
                     <div className="flex items-center gap-2">
                       <span className="text-green-400">✅</span>
                       <span className="text-gray-300">Backend API - <span className="text-white">Fully Working</span></span>
-                    </div>
+            </div>
                     <div className="flex items-center gap-2">
                       <span className="text-green-400">✅</span>
                       <span className="text-gray-300">Phantom Integration - <span className="text-white">Fully Working</span></span>
-                    </div>
+              </div>
                     <div className="flex items-center gap-2">
                       <span className="text-yellow-400">⚠️</span>
                       <span className="text-gray-300">Slab Program - <span className="text-yellow-300">Deployed (needs initialization)</span></span>
-                    </div>
-                  </div>
-                </div>
+            </div>
               </div>
             </div>
-            
+          </div>
+        </div>
+
             {/* Modal Footer */}
             <div className="px-6 py-4 bg-[#181825]/30 border-t border-[#181825] flex justify-end">
               <button
@@ -2475,8 +2481,8 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
               >
                 Got it!
               </button>
-            </div>
-          </div>
+      </div>
+    </div>
         </div>
       )}
       </div>
@@ -2577,7 +2583,8 @@ export default function TradingDashboard() {
     if (!publicKey) return;
     setFaucetLoading(true);
     try {
-      const response = await fetch('http://localhost:3000/api/faucet/airdrop', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+      const response = await fetch(`${API_URL}/api/faucet/airdrop`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -2632,7 +2639,7 @@ export default function TradingDashboard() {
   };
 
   return (
-    <div className="relative min-h-screen bg-black overflow-hidden">
+    <div className="relative min-h-screen bg-black overflow-hidden"> 
       {/* Toast Notifications */}
       <ToastContainer toasts={toasts} onClose={closeToast} />
       

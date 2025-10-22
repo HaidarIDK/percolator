@@ -58,22 +58,24 @@ export default function MonitorPage() {
 
   const fetchData = async () => {
     try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+      
       // Fetch only last 5 transactions
-      const txRes = await fetch('http://localhost:3000/api/monitor/transactions?limit=5')
+      const txRes = await fetch(`${API_URL}/api/monitor/transactions?limit=5`)
       const txData = await txRes.json()
       if (txData.success) {
         setTransactions(txData.transactions)
       }
 
       // Fetch slab state
-      const slabRes = await fetch('http://localhost:3000/api/monitor/slab/11111111111111111111111111111111')
+      const slabRes = await fetch(`${API_URL}/api/monitor/slab/11111111111111111111111111111111`)
       const slabData = await slabRes.json()
       if (slabData.success) {
         setSlabState(slabData.slab)
       }
 
       // Fetch global stats
-      const statsRes = await fetch('http://localhost:3000/api/monitor/stats')
+      const statsRes = await fetch(`${API_URL}/api/monitor/stats`)
       const statsData = await statsRes.json()
       if (statsData.success) {
         setStats(statsData.stats)
