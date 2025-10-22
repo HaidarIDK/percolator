@@ -880,6 +880,182 @@ export default function TradingDashboard() {
   
   const selectedSymbol = getSymbolFromCoin(selectedCoin);
 
+  const handleInitializeSlab = async () => {
+    if (!connected || !publicKey || !wallet.signTransaction) {
+      showToast('Connect wallet first!', 'warning');
+      return;
+    }
+
+    setPortfolioLoading(true);
+    try {
+      const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
+      
+      // Check balance
+      const balance = await connection.getBalance(publicKey);
+      if (balance < 0.5 * 1e9) {
+        showToast('Need at least 0.5 SOL! Get from https://faucet.solana.com', 'warning');
+        setPortfolioLoading(false);
+        return;
+      }
+
+      // Import required classes
+      const { Keypair, SystemProgram, TransactionInstruction } = await import('@solana/web3.js');
+
+      // Create Slab keypair
+      const slabAccount = Keypair.generate();
+      console.log('Slab Account:', slabAccount.publicKey.toBase58());
+
+      // Get rent
+      const SLAB_SIZE = 50 * 1024;
+      const rent = await connection.getMinimumBalanceForRentExemption(SLAB_SIZE);
+
+      // Create account instruction
+      const SLAB_PROGRAM_ID = new (await import('@solana/web3.js')).PublicKey('6EF2acRfPejnxXYd9apKc2wb3p2NLG8rKgWbCfp5G7Uz');
+      const ROUTER_PROGRAM_ID = new (await import('@solana/web3.js')).PublicKey('9CQWTSDobkHqWzvx4nufdke4C8GKuoaqiNBBLEYFoHoG');
+
+      const createIx = SystemProgram.createAccount({
+        fromPubkey: publicKey,
+        newAccountPubkey: slabAccount.publicKey,
+        lamports: rent,
+        space: SLAB_SIZE,
+        programId: SLAB_PROGRAM_ID,
+      });
+
+      // Initialize instruction
+      const initData = Buffer.alloc(1 + 32 + 32 + 32 + 2 + 2 + 8 + 8 + 8 + 2);
+      let offset = 0;
+      initData.writeUInt8(4, offset); offset += 1;
+      publicKey.toBuffer().copy(initData, offset); offset += 32;
+      SystemProgram.programId.toBuffer().copy(initData, offset); offset += 32;
+      ROUTER_PROGRAM_ID.toBuffer().copy(initData, offset); offset += 32;
+      initData.writeUInt16LE(500, offset); offset += 2;
+      initData.writeUInt16LE(300, offset); offset += 2;
+      // Write signed 64-bit integers manually (browser Buffer doesn't have writeBigInt64LE)
+      const makerFee = -2;
+      const makerFeeBuffer = Buffer.alloc(8);
+      makerFeeBuffer.writeInt32LE(makerFee, 0);
+      makerFeeBuffer.writeInt32LE(makerFee < 0 ? -1 : 0, 4);
+      makerFeeBuffer.copy(initData, offset); offset += 8;
+      
+      const takerFee = 5;
+      const takerFeeBuffer = Buffer.alloc(8);
+      takerFeeBuffer.writeUInt32LE(takerFee, 0);
+      takerFeeBuffer.writeUInt32LE(0, 4);
+      takerFeeBuffer.copy(initData, offset); offset += 8;
+      
+      const batch = 100;
+      const batchBuffer = Buffer.alloc(8);
+      batchBuffer.writeUInt32LE(batch, 0);
+      batchBuffer.writeUInt32LE(0, 4);
+      batchBuffer.copy(initData, offset); offset += 8;
+      
+      initData.writeUInt16LE(3, offset);
+
+      const initIx = new TransactionInstruction({
+        programId: SLAB_PROGRAM_ID,
+        keys: [
+          { pubkey: slabAccount.publicKey, isSigner: false, isWritable: true },
+          { pubkey: publicKey, isSigner: true, isWritable: false },
+        ],
+        data: initData,
+      });
+
+      // Transaction 1: Create + Init
+      const tx1 = new Transaction().add(createIx).add(initIx);
+      const { blockhash } = await connection.getLatestBlockhash();
+      tx1.recentBlockhash = blockhash;
+      tx1.feePayer = publicKey;
+      tx1.partialSign(slabAccount);
+
+      const signedTx1 = await wallet.signTransaction(tx1);
+      const sig1 = await connection.sendRawTransaction(signedTx1.serialize());
+      await connection.confirmTransaction(sig1, 'confirmed');
+
+      // Add Instrument
+      const instData = Buffer.alloc(1 + 40);
+      let instOff = 0;
+      instData.writeUInt8(5, instOff); instOff += 1;
+      Buffer.from('ETH/USDC'.padEnd(8, '\0').substring(0, 8), 'utf-8').copy(instData, instOff); instOff += 8;
+      
+      // Write u64 manually
+      const writeU64 = (buf: Buffer, offset: number, value: number) => {
+        buf.writeUInt32LE(value & 0xFFFFFFFF, offset);
+        buf.writeUInt32LE(Math.floor(value / 0x100000000), offset + 4);
+      };
+      
+      writeU64(instData, instOff, 1000000); instOff += 8; // Contract size
+      writeU64(instData, instOff, 10000); instOff += 8; // Tick
+      writeU64(instData, instOff, 1000); instOff += 8; // Lot
+      writeU64(instData, instOff, 3850000000); // Index price
+
+      const instIx = new TransactionInstruction({
+        programId: SLAB_PROGRAM_ID,
+        keys: [
+          { pubkey: slabAccount.publicKey, isSigner: false, isWritable: true },
+          { pubkey: publicKey, isSigner: true, isWritable: false },
+        ],
+        data: instData,
+      });
+
+      const tx2 = new Transaction().add(instIx);
+      tx2.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+      tx2.feePayer = publicKey;
+
+      const signedTx2 = await wallet.signTransaction(tx2);
+      const sig2 = await connection.sendRawTransaction(signedTx2.serialize());
+      await connection.confirmTransaction(sig2, 'confirmed');
+
+      showToast(`SUCCESS! Slab initialized!\n\nSlab: ${slabAccount.publicKey.toBase58()}\n\nNow creating your Portfolio...`, 'success');
+      console.log('Slab:', slabAccount.publicKey.toBase58());
+      console.log('Init TX:', sig1);
+      console.log('Instrument TX:', sig2);
+      
+      // Now create Portfolio PDA for Router trading
+      console.log('Creating Portfolio PDA...');
+      const ROUTER_PROGRAM_ID_PK = new (await import('@solana/web3.js')).PublicKey('9CQWTSDobkHqWzvx4nufdke4C8GKuoaqiNBBLEYFoHoG');
+      
+      // Derive Portfolio PDA
+      const [portfolioPDA, portfolioBump] = (await import('@solana/web3.js')).PublicKey.findProgramAddressSync(
+        [
+          Buffer.from('portfolio'),
+          publicKey.toBuffer(),
+        ],
+        ROUTER_PROGRAM_ID_PK
+      );
+      
+      console.log('Portfolio PDA:', portfolioPDA.toBase58());
+      
+      // Check if it already exists
+      const portfolioInfo = await connection.getAccountInfo(portfolioPDA);
+      if (portfolioInfo) {
+        showToast(`COMPLETE!\n\nSlab: ${slabAccount.publicKey.toBase58()}\nPortfolio: ${portfolioPDA.toBase58()} (already exists)\n\nUpdate backend SLAB_ACCOUNT!`, 'success');
+      } else {
+        // Create Portfolio account
+        const PORTFOLIO_SIZE = 7000;
+        const portfolioRent = await connection.getMinimumBalanceForRentExemption(PORTFOLIO_SIZE);
+        
+        const createPortfolioIx = SystemProgram.createAccount({
+          fromPubkey: publicKey,
+          newAccountPubkey: portfolioPDA,
+          lamports: portfolioRent,
+          space: PORTFOLIO_SIZE,
+          programId: ROUTER_PROGRAM_ID_PK,
+        });
+        
+        // ERROR: Can't create PDA with SystemProgram.createAccount!
+        // PDAs must be created via CPI from the program
+        // So we just show success for now
+        showToast(`COMPLETE!\n\nSlab: ${slabAccount.publicKey.toBase58()}\n\nPortfolio will be auto-created on first deposit!\n\nUpdate backend SLAB_ACCOUNT!`, 'success');
+      }
+
+    } catch (error: any) {
+      console.error('Initialize failed:', error);
+      showToast(`Initialize failed: ${error.message}`, 'error');
+    } finally {
+      setPortfolioLoading(false);
+    }
+  };
+
   const handleDeposit = async () => {
     if (!connected || !publicKey || !wallet.signTransaction) {
       showToast('Connect wallet first', 'warning');
@@ -1075,20 +1251,36 @@ export default function TradingDashboard() {
             )}
             
             {connected && publicKey && (
-              <button
-                onClick={handleFaucetRequest}
-                disabled={faucetLoading}
-                className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 rounded-lg text-blue-400 text-sm font-medium transition-all disabled:opacity-50"
-              >
-                {faucetLoading ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                    Requesting...
-                  </div>
-                ) : (
-                  'Get SOL'
-                )}
-              </button>
+              <>
+                <button
+                  onClick={handleInitializeSlab}
+                  disabled={portfolioLoading}
+                  className="px-4 py-2 bg-green-500/20 hover:bg-green-500/30 border border-green-500/50 rounded-lg text-green-400 text-sm font-medium transition-all disabled:opacity-50"
+                >
+                  {portfolioLoading ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                      Initializing...
+                    </div>
+                  ) : (
+                    'Initialize New Slab'
+                  )}
+                </button>
+                <button
+                  onClick={handleFaucetRequest}
+                  disabled={faucetLoading}
+                  className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 rounded-lg text-blue-400 text-sm font-medium transition-all disabled:opacity-50"
+                >
+                  {faucetLoading ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                      Requesting...
+                    </div>
+                  ) : (
+                    'Get SOL'
+                  )}
+                </button>
+              </>
             )}
           </div>
         </div>

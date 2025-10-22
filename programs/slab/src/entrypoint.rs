@@ -426,9 +426,9 @@ fn handle_initialize(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8])
 
     // Initialize header
     slab.header = SlabHeader::new(
-        authority,
-        oracle,
-        router,
+        *program_id,    // program_id
+        authority,      // lp_owner
+        router,         // router_id
         imr as u64,
         mmr as u64,
         maker_fee as i64,

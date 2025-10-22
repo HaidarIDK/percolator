@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { PublicKey, Transaction, Connection, clusterApiUrl } from '@solana/web3.js';
+import { PublicKey, Transaction, Connection, clusterApiUrl, SystemProgram } from '@solana/web3.js';
 import { 
   buildDepositInstruction,
   buildWithdrawInstruction,
@@ -48,17 +48,42 @@ routerRouter.post('/deposit', async (req, res) => {
     console.log(`   Amount: ${amount} SOL (${amountLamports} lamports)`);
 
     // Build deposit instruction
+    // Derive Portfolio PDA
+    const [portfolioPDA, portfolioBump] = derivePortfolioPDA(userPubkey);
+    
+    console.log(`📋 Portfolio PDA: ${portfolioPDA.toBase58()}`);
+    console.log(`   Bump: ${portfolioBump}`);
+    console.log(`   User: ${userPubkey.toBase58()}`);
+    console.log(`   Router Program: ${ROUTER_PROGRAM_ID.toBase58()}`);
+    
+    // Check if portfolio exists
+    const connection = getConnection();
+    const portfolioAccountInfo = await connection.getAccountInfo(portfolioPDA);
+    
+    const transaction = new Transaction();
+    
+    // If portfolio doesn't exist, user needs to initialize it first
+    if (!portfolioAccountInfo) {
+      return res.status(400).json({
+        success: false,
+        error: 'Portfolio not initialized. Click "Initialize New Slab" button first to set up trading.',
+        portfolioAddress: portfolioPDA.toBase58(),
+        needsInit: true,
+      });
+    }
+    
+    console.log(`📋 Portfolio account exists: ${portfolioPDA.toBase58()}`);
+    console.log(`   Owner: ${portfolioAccountInfo.owner.toBase58()}`);
+    console.log(`   Lamports: ${portfolioAccountInfo.lamports}`);
+
     const depositIx = buildDepositInstruction({
       userAuthority: userPubkey,
       amount: amountLamports,
     });
 
-    // Create transaction
-    const transaction = new Transaction();
     transaction.add(depositIx);
 
     // Get recent blockhash
-    const connection = getConnection();
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
     transaction.recentBlockhash = blockhash;
     transaction.lastValidBlockHeight = lastValidBlockHeight;
@@ -66,9 +91,6 @@ routerRouter.post('/deposit', async (req, res) => {
 
     // Serialize for frontend
     const serializedTx = serializeTransaction(transaction);
-
-    // Get portfolio info
-    const [portfolioPDA] = derivePortfolioPDA(userPubkey);
 
     console.log(`✅ Deposit transaction built`);
     console.log(`   Portfolio PDA: ${portfolioPDA.toBase58()}`);

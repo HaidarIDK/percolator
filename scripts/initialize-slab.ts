@@ -20,10 +20,10 @@ import * as fs from 'fs';
 const SLAB_PROGRAM_ID = new PublicKey('6EF2acRfPejnxXYd9apKc2wb3p2NLG8rKgWbCfp5G7Uz');
 const ROUTER_PROGRAM_ID = new PublicKey('9CQWTSDobkHqWzvx4nufdke4C8GKuoaqiNBBLEYFoHoG');
 
-// Slab state size: 512 KB to be safe
-// Cheap: ~3.5 SOL rent instead of 73 SOL!
-// Supports: 50 users, 300 orders, 100 positions, 50 reservations
-const SLAB_ACCOUNT_SIZE = 512 * 1024; // 512 KB - SAFE SIZE!
+// Slab state size: 50 KB for MICRO-CHEAP POC
+// SUPER ULTRA cheap: ~0.35 SOL rent!
+// Supports: 5 users, 25 orders, 10 positions, 5 reservations
+const SLAB_ACCOUNT_SIZE = 50 * 1024; // 50 KB - FITS IN CURRENT BALANCE!
 
 async function main() {
   console.log('🚀 Percolator Slab Initialization Script\n');
@@ -146,6 +146,7 @@ async function main() {
   offset += 1;
   
   // Authority (LP owner) - use payer
+  console.log(`   Setting authority to: ${payer.publicKey.toBase58()}`);
   payer.publicKey.toBuffer().copy(instructionData, offset);
   offset += 32;
   
@@ -189,26 +190,79 @@ async function main() {
     data: instructionData,
   };
 
-  // Build and send transaction
-  console.log('\n📤 Submitting transaction...');
-  const transaction = new Transaction()
+  // Build and send INITIALIZATION transaction
+  console.log('\n📤 Submitting initialization transaction...');
+  const initTransaction = new Transaction()
     .add(createAccountIx)
     .add(initializeIx);
 
   try {
-    const signature = await sendAndConfirmTransaction(
+    const initSignature = await sendAndConfirmTransaction(
       connection,
-      transaction,
+      initTransaction,
       [payer, slabAccount],
       { commitment: 'confirmed' }
     );
 
-    console.log('\n🎉 SUCCESS! Slab initialized!');
+    console.log('\n✅ Slab initialized!');
+    console.log(`   Transaction: ${initSignature}`);
+    
+    // Now add instrument in a SEPARATE transaction
+    console.log('\n🔧 Adding ETH/USDC instrument...');
+    
+    const addInstrumentData = Buffer.alloc(1 + 40);
+    let instOffset = 0;
+    
+    // Discriminator: 5 = AddInstrument
+    addInstrumentData.writeUInt8(5, instOffset);
+    instOffset += 1;
+    
+    // Symbol (8 bytes)
+    const symbolBytes = Buffer.from('ETH/USDC'.padEnd(8, '\0').substring(0, 8), 'utf-8');
+    symbolBytes.copy(addInstrumentData, instOffset);
+    instOffset += 8;
+    
+    // Contract size: 1.0 with 6 decimals
+    addInstrumentData.writeBigUInt64LE(BigInt(1000000), instOffset);
+    instOffset += 8;
+    
+    // Tick: $0.01 with 6 decimals
+    addInstrumentData.writeBigUInt64LE(BigInt(10000), instOffset);
+    instOffset += 8;
+    
+    // Lot: 0.001 ETH with 6 decimals
+    addInstrumentData.writeBigUInt64LE(BigInt(1000), instOffset);
+    instOffset += 8;
+    
+    // Index price: $3850 with 6 decimals
+    addInstrumentData.writeBigUInt64LE(BigInt(3850000000), instOffset);
+    
+    const addInstrumentIx = {
+      programId: SLAB_PROGRAM_ID,
+      keys: [
+        { pubkey: slabAccount.publicKey, isSigner: false, isWritable: true },
+        { pubkey: payer.publicKey, isSigner: true, isWritable: false },
+      ],
+      data: addInstrumentData,
+    };
+    
+    const addInstrumentTransaction = new Transaction().add(addInstrumentIx);
+    
+    const instrumentSignature = await sendAndConfirmTransaction(
+      connection,
+      addInstrumentTransaction,
+      [payer],
+      { commitment: 'confirmed' }
+    );
+
+    console.log('\n🎉 SUCCESS! Slab initialized with ETH/USDC instrument!');
     console.log(`\n📊 Details:`);
     console.log(`   Slab Account: ${slabAccount.publicKey.toBase58()}`);
-    console.log(`   Transaction: ${signature}`);
+    console.log(`   Init Transaction: ${initSignature}`);
+    console.log(`   Instrument Transaction: ${instrumentSignature}`);
+    console.log(`   Instrument: ETH/USDC (index 0)`);
     console.log(`\n🔍 View on Explorer:`);
-    console.log(`   https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+    console.log(`   https://explorer.solana.com/tx/${instrumentSignature}?cluster=devnet`);
     console.log(`   https://explorer.solana.com/address/${slabAccount.publicKey.toBase58()}?cluster=devnet`);
     
     // Save the Slab account address
@@ -217,8 +271,10 @@ async function main() {
       JSON.stringify({
         slabAccount: slabAccount.publicKey.toBase58(),
         programId: SLAB_PROGRAM_ID.toBase58(),
-        transaction: signature,
+        initTransaction: initSignature,
+        instrumentTransaction: instrumentSignature,
         timestamp: new Date().toISOString(),
+        instruments: ['ETH/USDC'],
       }, null, 2)
     );
     console.log(`\n💾 Slab account info saved to slab-account.json`);

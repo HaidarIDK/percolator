@@ -93,7 +93,179 @@ fn handle_initialize(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8])
         return Err(PercolatorError::InvalidInstruction.into());
     }
 
-    let mut offset = 0;
+    let mut offset = 0;react-dom-client.development.js:25630 Download the React DevTools for a better development experience: https://react.dev/link/react-devtools
+useStandardWalletAdapters.ts:49 Phantom was registered as a Standard Wallet. The Wallet Adapter for Phantom can be removed from your app.
+useStandardWalletAdapters.useMemo @ useStandardWalletAdapters.ts:49
+useStandardWalletAdapters.useMemo @ useStandardWalletAdapters.ts:45
+mountMemo @ react-dom-client.development.js:7868
+useMemo @ react-dom-client.development.js:23894
+exports.useMemo @ react.development.js:1238
+useStandardWalletAdapters @ useStandardWalletAdapters.ts:42
+WalletProvider @ WalletProvider.tsx:52
+react_stack_bottom_frame @ react-dom-client.development.js:23583
+renderWithHooks @ react-dom-client.development.js:6792
+updateFunctionComponent @ react-dom-client.development.js:9246
+beginWork @ react-dom-client.development.js:10857
+runWithFiberInDEV @ react-dom-client.development.js:871
+performUnitOfWork @ react-dom-client.development.js:15726
+workLoopConcurrentByScheduler @ react-dom-client.development.js:15720
+renderRootConcurrent @ react-dom-client.development.js:15695
+performWorkOnRoot @ react-dom-client.development.js:14989
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16815
+performWorkUntilDeadline @ scheduler.development.js:45
+<WalletProvider>
+exports.jsxDEV @ react-jsx-dev-runtime.development.js:323
+WalletProvider @ WalletProvider.tsx:32
+react_stack_bottom_frame @ react-dom-client.development.js:23583
+renderWithHooksAgain @ react-dom-client.development.js:6892
+renderWithHooks @ react-dom-client.development.js:6804
+updateFunctionComponent @ react-dom-client.development.js:9246
+beginWork @ react-dom-client.development.js:10806
+runWithFiberInDEV @ react-dom-client.development.js:871
+performUnitOfWork @ react-dom-client.development.js:15726
+workLoopConcurrentByScheduler @ react-dom-client.development.js:15720
+renderRootConcurrent @ react-dom-client.development.js:15695
+performWorkOnRoot @ react-dom-client.development.js:14989
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16815
+performWorkUntilDeadline @ scheduler.development.js:45
+"use client"
+RootLayout @ layout.tsx:30
+initializeElement @ react-server-dom-turbopack-client.browser.development.js:1333
+(anonymous) @ react-server-dom-turbopack-client.browser.development.js:3055
+initializeModelChunk @ react-server-dom-turbopack-client.browser.development.js:1235
+getOutlinedModel @ react-server-dom-turbopack-client.browser.development.js:1623
+parseModelString @ react-server-dom-turbopack-client.browser.development.js:1982
+(anonymous) @ react-server-dom-turbopack-client.browser.development.js:2985
+initializeModelChunk @ react-server-dom-turbopack-client.browser.development.js:1235
+resolveModelChunk @ react-server-dom-turbopack-client.browser.development.js:1092
+processFullStringRow @ react-server-dom-turbopack-client.browser.development.js:2888
+processFullBinaryRow @ react-server-dom-turbopack-client.browser.development.js:2755
+processBinaryChunk @ react-server-dom-turbopack-client.browser.development.js:2958
+progress @ react-server-dom-turbopack-client.browser.development.js:3222
+<RootLayout>
+initializeFakeTask @ react-server-dom-turbopack-client.browser.development.js:2518
+initializeDebugInfo @ react-server-dom-turbopack-client.browser.development.js:2543
+initializeDebugChunk @ react-server-dom-turbopack-client.browser.development.js:1182
+processFullStringRow @ react-server-dom-turbopack-client.browser.development.js:2839
+processFullBinaryRow @ react-server-dom-turbopack-client.browser.development.js:2755
+processBinaryChunk @ react-server-dom-turbopack-client.browser.development.js:2958
+progress @ react-server-dom-turbopack-client.browser.development.js:3222
+"use server"
+ResponseInstance @ react-server-dom-turbopack-client.browser.development.js:2030
+createResponseFromOptions @ react-server-dom-turbopack-client.browser.development.js:3083
+exports.createFromReadableStream @ react-server-dom-turbopack-client.browser.development.js:3460
+__TURBOPACK__module__evaluation__ @ app-index.tsx:156
+(anonymous) @ dev-base.ts:241
+runModuleExecutionHooks @ dev-base.ts:275
+instantiateModule @ dev-base.ts:235
+getOrInstantiateModuleFromParent @ dev-base.ts:162
+commonJsRequire @ runtime-utils.ts:366
+(anonymous) @ app-next-turbopack.ts:11
+(anonymous) @ app-bootstrap.ts:76
+loadScriptsInSequence @ app-bootstrap.ts:22
+appBootstrap @ app-bootstrap.ts:58
+__TURBOPACK__module__evaluation__ @ app-next-turbopack.ts:10
+(anonymous) @ dev-base.ts:241
+runModuleExecutionHooks @ dev-base.ts:275
+instantiateModule @ dev-base.ts:235
+getOrInstantiateRuntimeModule @ dev-base.ts:128
+registerChunk @ runtime-backend-dom.ts:57
+await in registerChunk
+registerChunk @ dev-base.ts:1146
+(anonymous) @ dev-backend-dom.ts:126
+(anonymous) @ dev-backend-dom.ts:126
+page.tsx:406 Real market price for ethereum: $3867.74
+page.tsx:898 Depositing 1 SOL to portfolio...
+page.tsx:931 📡 Submitting deposit transaction...
+page.tsx:965 Deposit transaction failed: SendTransactionError: Simulation failed. 
+Message: Transaction simulation failed: Error processing Instruction 2: custom program error: 0x1. 
+Logs: 
+[
+  "Program ComputeBudget111111111111111111111111111111 invoke [1]",
+  "Program ComputeBudget111111111111111111111111111111 success",
+  "Program ComputeBudget111111111111111111111111111111 invoke [1]",
+  "Program ComputeBudget111111111111111111111111111111 success",
+  "Program 9CQWTSDobkHqWzvx4nufdke4C8GKuoaqiNBBLEYFoHoG invoke [1]",
+  "Program log: Instruction: Deposit",
+  "Program 9CQWTSDobkHqWzvx4nufdke4C8GKuoaqiNBBLEYFoHoG consumed 362 of 199700 compute units",
+  "Program 9CQWTSDobkHqWzvx4nufdke4C8GKuoaqiNBBLEYFoHoG failed: custom program error: 0x1"
+]. 
+Catch the `SendTransactionError` and call `getLogs()` on it for full details.
+    at Connection.sendEncodedTransaction (connection.ts:6053:13)
+    at async Connection.sendRawTransaction (connection.ts:6009:20)
+    at async handleDeposit (page.tsx:932:29)
+error @ intercept-console-error.ts:44
+handleDeposit @ page.tsx:965
+await in handleDeposit
+executeDispatch @ react-dom-client.development.js:16970
+runWithFiberInDEV @ react-dom-client.development.js:871
+processDispatchQueue @ react-dom-client.development.js:17020
+(anonymous) @ react-dom-client.development.js:17621
+batchedUpdates$1 @ react-dom-client.development.js:3311
+dispatchEventForPluginEventSystem @ react-dom-client.development.js:17174
+dispatchEvent @ react-dom-client.development.js:21357
+dispatchDiscreteEvent @ react-dom-client.development.js:21325
+<button>
+exports.jsxDEV @ react-jsx-dev-runtime.development.js:323
+TradingDashboard @ page.tsx:1282
+react_stack_bottom_frame @ react-dom-client.development.js:23583
+renderWithHooksAgain @ react-dom-client.development.js:6892
+renderWithHooks @ react-dom-client.development.js:6804
+updateFunctionComponent @ react-dom-client.development.js:9246
+beginWork @ react-dom-client.development.js:10857
+runWithFiberInDEV @ react-dom-client.development.js:871
+performUnitOfWork @ react-dom-client.development.js:15726
+workLoopSync @ react-dom-client.development.js:15546
+renderRootSync @ react-dom-client.development.js:15526
+performWorkOnRoot @ react-dom-client.development.js:14990
+performSyncWorkOnRoot @ react-dom-client.development.js:16830
+flushSyncWorkAcrossRoots_impl @ react-dom-client.development.js:16676
+processRootScheduleInMicrotask @ react-dom-client.development.js:16714
+(anonymous) @ react-dom-client.development.js:16849
+<TradingDashboard>
+exports.jsx @ react-jsx-runtime.development.js:323
+ClientPageRoot @ client-page.tsx:60
+react_stack_bottom_frame @ react-dom-client.development.js:23583
+renderWithHooksAgain @ react-dom-client.development.js:6892
+renderWithHooks @ react-dom-client.development.js:6804
+updateFunctionComponent @ react-dom-client.development.js:9246
+beginWork @ react-dom-client.development.js:10806
+runWithFiberInDEV @ react-dom-client.development.js:871
+performUnitOfWork @ react-dom-client.development.js:15726
+workLoopConcurrentByScheduler @ react-dom-client.development.js:15720
+renderRootConcurrent @ react-dom-client.development.js:15695
+performWorkOnRoot @ react-dom-client.development.js:14989
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16815
+performWorkUntilDeadline @ scheduler.development.js:45
+"use client"
+Promise.all @ VM12073 <anonymous>:1
+Promise.all @ VM12073 <anonymous>:1
+initializeElement @ react-server-dom-turbopack-client.browser.development.js:1332
+"use server"
+ResponseInstance @ react-server-dom-turbopack-client.browser.development.js:2030
+createResponseFromOptions @ react-server-dom-turbopack-client.browser.development.js:3083
+exports.createFromReadableStream @ react-server-dom-turbopack-client.browser.development.js:3460
+__TURBOPACK__module__evaluation__ @ app-index.tsx:156
+(anonymous) @ dev-base.ts:241
+runModuleExecutionHooks @ dev-base.ts:275
+instantiateModule @ dev-base.ts:235
+getOrInstantiateModuleFromParent @ dev-base.ts:162
+commonJsRequire @ runtime-utils.ts:366
+(anonymous) @ app-next-turbopack.ts:11
+(anonymous) @ app-bootstrap.ts:76
+loadScriptsInSequence @ app-bootstrap.ts:22
+appBootstrap @ app-bootstrap.ts:58
+__TURBOPACK__module__evaluation__ @ app-next-turbopack.ts:10
+(anonymous) @ dev-base.ts:241
+runModuleExecutionHooks @ dev-base.ts:275
+instantiateModule @ dev-base.ts:235
+getOrInstantiateRuntimeModule @ dev-base.ts:128
+registerChunk @ runtime-backend-dom.ts:57
+await in registerChunk
+registerChunk @ dev-base.ts:1146
+(anonymous) @ dev-backend-dom.ts:126
+(anonymous) @ dev-backend-dom.ts:126
+
     let authority_bytes = read_bytes::<32>(data, &mut offset)?;
     let authority = Pubkey::from(authority_bytes);
 
@@ -152,8 +324,88 @@ fn handle_deposit(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) ->
     crate::instructions::process_deposit(vault, amount)?;
 
     // Update user portfolio (add to equity)
-    let portfolio = unsafe { borrow_account_data_mut::<Portfolio>(portfolio_account)? };
-    portfolio.equity = portfolio.equity.saturating_add(amount as i128);
+    // Check if portfolio account is allocated
+    let portfolio = unsafe {
+        // If portfolio has lamports but owner is System Program, it needs to be allocated and assigned
+        if portfolio_account.owner() == &pinocchio::pubkey!("11111111111111111111111111111111") {
+            msg!("Allocating and assigning Portfolio PDA");
+            
+            // The account has been funded but not allocated
+            // We need to allocate space and assign owner via CPI
+            let portfolio_size = core::mem::size_of::<Portfolio>();
+            
+            // Derive PDA seeds
+            let seeds = &[
+                b"portfolio" as &[u8],
+                user_authority.key.as_ref(),
+            ];
+            let (expected_pda, bump) = Pubkey::find_program_address(seeds, program_id);
+            
+            // Verify the portfolio account matches the expected PDA
+            if portfolio_account.key != &expected_pda {
+                msg!("Error: Portfolio account mismatch");
+                return Err(PercolatorError::InvalidAccount.into());
+            }
+            
+            // Allocate space
+            pinocchio::program::invoke_signed(
+                &pinocchio::instruction::Instruction {
+                    program_id: &pinocchio::pubkey!("11111111111111111111111111111111"),
+                    accounts: &[
+                        pinocchio::instruction::AccountMeta {
+                            pubkey: *portfolio_account.key,
+                            is_signer: true,
+                            is_writable: true,
+                        },
+                    ],
+                    data: &{
+                        let mut data = [0u8; 12];
+                        data[0..4].copy_from_slice(&8u32.to_le_bytes()); // Allocate instruction
+                        data[4..12].copy_from_slice(&(portfolio_size as u64).to_le_bytes());
+                        data
+                    },
+                },
+                &[portfolio_account],
+                &[&[b"portfolio", user_authority.key.as_ref(), &[bump]]],
+            )?;
+            
+            // Assign owner
+            pinocchio::program::invoke_signed(
+                &pinocchio::instruction::Instruction {
+                    program_id: &pinocchio::pubkey!("11111111111111111111111111111111"),
+                    accounts: &[
+                        pinocchio::instruction::AccountMeta {
+                            pubkey: *portfolio_account.key,
+                            is_signer: true,
+                            is_writable: true,
+                        },
+                    ],
+                    data: &{
+                        let mut data = [0u8; 36];
+                        data[0..4].copy_from_slice(&1u32.to_le_bytes()); // Assign instruction
+                        data[4..36].copy_from_slice(program_id.as_ref());
+                        data
+                    },
+                },
+                &[portfolio_account],
+                &[&[b"portfolio", user_authority.key.as_ref(), &[bump]]],
+            )?;
+            
+            // Initialize portfolio data
+            let portfolio_data = Portfolio::new(*program_id, *user_authority.key, bump);
+            let portfolio_bytes = core::slice::from_raw_parts(
+                &portfolio_data as *const Portfolio as *const u8,
+                core::mem::size_of::<Portfolio>()
+            );
+            portfolio_account.data.borrow_mut()[..core::mem::size_of::<Portfolio>()]
+                .copy_from_slice(portfolio_bytes);
+            
+            msg!("Portfolio PDA allocated and initialized");
+        }
+        
+        borrow_account_data_mut::<Portfolio>(portfolio_account)?
+    };
+    portfolio.update_equity(portfolio.equity.saturating_add(amount as i128));
 
     // TODO: Actual token transfer via CPI to SPL Token program
     // For now, just log the operation
