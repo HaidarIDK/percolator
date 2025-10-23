@@ -25,7 +25,9 @@ const HOST = process.env.HOST || '0.0.0.0';
 const allowedOrigins = [
   'http://localhost:3001',
   'http://localhost:3000',
-  process.env.FRONTEND_URL, // Production frontend URL
+  'https://dex.percolator.site', // Production frontend URL
+  'https://www.dex.percolator.site', // WWW variant
+  process.env.FRONTEND_URL, // Additional custom frontend URL
   'https://percolator-frontend.onrender.com', // Default Render URL
 ];
 

@@ -14,7 +14,7 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://s3.tradingview.com https://www.tradingview.com; style-src 'self' 'unsafe-inline' https://www.tradingview.com https://fonts.googleapis.com http://fonts.googleapis.com; style-src-elem 'self' 'unsafe-inline' https://www.tradingview.com https://fonts.googleapis.com http://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com http://fonts.gstatic.com; frame-src 'self' https://www.tradingview.com https://s.tradingview.com https://tradingview-widget.com https://www.tradingview-widget.com; connect-src 'self' http://localhost:* ws://localhost:* wss://localhost:* https://*.solana.com https://api.devnet.solana.com https://api.mainnet-beta.solana.com https://*.rpcpool.com https://*.helius-rpc.com https://*.genesysgo.net https://www.tradingview.com https://tradingview-widget.com https://www.tradingview-widget.com wss://widgetdata.tradingview.com wss://data.tradingview.com wss://api.hyperliquid.xyz wss://api.hyperliquid-testnet.xyz; img-src 'self' data: https://www.tradingview.com https://raw.githubusercontent.com; object-src 'none'; base-uri 'self';",
+            value: "default-src 'self' 'unsafe-eval' 'unsafe-inline'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https: blob:; style-src 'self' 'unsafe-inline' https:; style-src-elem 'self' 'unsafe-inline' https:; font-src 'self' data: https:; frame-src 'self' https:; connect-src * wss: ws: https: http:; img-src 'self' data: https: http: blob:; object-src 'none'; base-uri 'self';",
           },
         ],
       },
