@@ -1016,7 +1016,7 @@ const OrderBook = ({ symbol }: { symbol: string }) => {
                       {trade.price?.toFixed(2) || '0.00'}
                     </span>
                     <span className="text-white">{trade.quantity?.toFixed(4) || '0.0000'}</span>
-                    <span className="text-gray-400 text-xs">
+                    <span className="text-gray-400 text-xs" suppressHydrationWarning>
                       {new Date(trade.timestamp || Date.now()).toLocaleTimeString()}
                     </span>
                   </div>
@@ -1133,7 +1133,7 @@ const PastTrades = ({ symbol }: { symbol: string }) => {
                   </span>
                   <span className="text-white">{trade.price.toFixed(2)}</span>
                   <span className="text-gray-300">{trade.quantity.toFixed(4)}</span>
-                  <span className="text-gray-400 text-xs">
+                  <span className="text-gray-400 text-xs" suppressHydrationWarning>
                     {new Date(trade.timestamp).toLocaleTimeString()}
                   </span>
                 </div>
@@ -3176,7 +3176,7 @@ const StatusFooter = () => {
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
             <span className="text-xs text-gray-400">Last update:</span>
-            <span className="text-xs text-gray-300">
+            <span className="text-xs text-gray-300" suppressHydrationWarning>
               {lastUpdate.toLocaleTimeString()}
             </span>
           </div>
