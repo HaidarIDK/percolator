@@ -25,6 +25,7 @@ export default function SimpleTradePage() {
   // Order book state for YOUR Slab account
   const [orderbook, setOrderbook] = useState<any>(null)
   const [recentTrades, setRecentTrades] = useState<any[]>([])
+  const [transactions, setTransactions] = useState<any[]>([])
   const [balance, setBalance] = useState<number>(0)
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
 
@@ -57,6 +58,27 @@ export default function SimpleTradePage() {
 
     fetchOrderbook()
     const interval = setInterval(fetchOrderbook, 5000) // Update every 5s from blockchain
+    return () => clearInterval(interval)
+  }, [])
+
+  // Fetch transaction history from blockchain
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
+        const response = await fetch(`${API_URL}/api/slab-live/transactions?limit=20`)
+        const data = await response.json()
+        
+        if (data.success) {
+          setTransactions(data.transactions)
+        }
+      } catch (error) {
+        console.error('Failed to fetch transactions:', error)
+      }
+    }
+
+    fetchTransactions()
+    const interval = setInterval(fetchTransactions, 10000) // Update every 10s
     return () => clearInterval(interval)
   }, [])
 
@@ -274,8 +296,8 @@ export default function SimpleTradePage() {
       <div className="relative z-10 max-w-[1600px] mx-auto px-6 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* LEFT: Your Slab's Order Book (2/3 width) */}
-          <div className="lg:col-span-2">
+          {/* LEFT: Your Slab's Order Book & Transaction History (2/3 width) */}
+          <div className="lg:col-span-2 space-y-6">
             <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 backdrop-blur-sm">
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -398,6 +420,69 @@ export default function SimpleTradePage() {
                 >
                   View on Solana Explorer →
                 </a>
+              </div>
+            </div>
+
+            {/* Transaction History Section */}
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 backdrop-blur-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-xl font-bold">All Slab Transactions</h3>
+                  <p className="text-xs text-zinc-500 mt-1">On-Chain History · Last 20</p>
+                </div>
+                <a
+                  href={EXPLORERS.solanaExplorer(ACCOUNTS.slab.toBase58(), NETWORK.cluster)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-400 hover:text-blue-300"
+                >
+                  View All on Explorer →
+                </a>
+              </div>
+
+              <div className="space-y-2">
+                {transactions.length === 0 ? (
+                  <div className="text-center py-8 text-zinc-600 border border-zinc-800 rounded-lg">
+                    No transactions yet. Be the first to trade!
+                  </div>
+                ) : (
+                  transactions.map((tx, i) => (
+                    <a
+                      key={i}
+                      href={tx.solscanLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block p-3 bg-zinc-800/30 hover:bg-zinc-800/50 rounded-lg border border-zinc-700/50 hover:border-zinc-600/50 transition-all group"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          {tx.err ? (
+                            <span className="text-red-400 text-xs font-semibold">❌ FAILED</span>
+                          ) : (
+                            <span className="text-green-400 text-xs font-semibold">✅ SUCCESS</span>
+                          )}
+                          <span className="text-zinc-500 text-xs">
+                            Slot {tx.slot?.toLocaleString()}
+                          </span>
+                        </div>
+                        <span className="text-zinc-500 text-xs">
+                          {tx.blockTime ? new Date(tx.blockTime * 1000).toLocaleString() : 'Pending'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <code className="text-xs font-mono text-zinc-400 group-hover:text-zinc-300">
+                          {tx.signature.substring(0, 16)}...{tx.signature.substring(tx.signature.length - 16)}
+                        </code>
+                        <span className="text-blue-400 text-xs group-hover:text-blue-300">
+                          View →
+                        </span>
+                      </div>
+                      {tx.memo && (
+                        <div className="mt-2 text-xs text-zinc-500">{tx.memo}</div>
+                      )}
+                    </a>
+                  ))
+                )}
               </div>
             </div>
           </div>
