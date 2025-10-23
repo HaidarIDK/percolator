@@ -33,14 +33,16 @@ export const SLAB_ACCOUNT = process.env.SLAB_ACCOUNT
  * Instruction discriminators
  */
 export enum SlabInstruction {
-  Reserve = 0,
-  Commit = 1,
-  Cancel = 2,
-  BatchOpen = 3,
-  Initialize = 4,
-  AddInstrument = 5,
-  UpdateFunding = 6,
-  Liquidate = 7,
+  Initialize = 0,
+  CommitFill = 1,
+  Reserve = 2,
+  Commit = 3,
+  Cancel = 4,
+  // Future instructions (not yet implemented):
+  BatchOpen = 5,
+  AddInstrument = 6,
+  UpdateFunding = 7,
+  Liquidate = 8,
 }
 
 export enum RouterInstruction {

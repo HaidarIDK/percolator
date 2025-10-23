@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Trading - Percolator v0.1</title>
+    <style>
+        body {
+            font-family: system-ui;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #111;
+            color: #fff;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+        button:hover { background: #45a049; }
+        button:disabled { background: #666; cursor: not-allowed; }
+        #log {
+            background: #222;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success { color: #4CAF50; }
+        .error { color: #f44336; }
+        .info { color: #2196F3; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Percolator Trading Test</h1>
+    <p>Test Reserve/Commit trading on Slab: <code>5Yd2fL7f1DhmNL3u82ptZ21CUpFJHYs1Fqfg2Qs9CLDB</code></p>
+    
+    <button id="connectBtn">1. Connect Phantom Wallet</button><br>
+    <button id="reserveBtn" disabled>2. Reserve Trade (BUY 1 @ $100)</button><br>
+    <button id="commitBtn" disabled>3. Commit Trade</button><br>
+    
+    <div id="log"></div>
+
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <script>
+        const log = document.getElementById('log');
+        const connectBtn = document.getElementById('connectBtn');
+        const reserveBtn = document.getElementById('reserveBtn');
+        const commitBtn = document.getElementById('commitBtn');
+        
+        let wallet = null;
+        let holdId = null;
+        
+        function addLog(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = type;
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            log.appendChild(div);
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        connectBtn.onclick = async () => {
+            try {
+                if (window.solana && window.solana.isPhantom) {
+                    const resp = await window.solana.connect();
+                    wallet = window.solana;
+                    addLog(`✅ Connected: ${resp.publicKey.toString()}`, 'success');
+                    connectBtn.textContent = `✅ Connected: ${resp.publicKey.toString().substring(0, 8)}...`;
+                    connectBtn.disabled = true;
+                    reserveBtn.disabled = false;
+                } else {
+                    addLog('❌ Phantom wallet not found', 'error');
+                }
+            } catch (err) {
+                addLog(`❌ ${err.message}`, 'error');
+            }
+        };
+        
+        reserveBtn.onclick = async () => {
+            try {
+                reserveBtn.disabled = true;
+                addLog('🔄 Building Reserve transaction...');
+                
+                const response = await fetch('http://localhost:3000/api/trade/reserve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user: wallet.publicKey.toString(),
+                        side: 'buy',
+                        price: 100,
+                        quantity: 1,
+                        instrument: 0
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    addLog(`❌ Reserve failed: ${result.error}`, 'error');
+                    reserveBtn.disabled = false;
+                    return;
+                }
+                
+                addLog(`✅ Transaction built, Hold ID: ${result.holdId}`, 'success');
+                holdId = result.holdId;
+                
+                // Sign and send
+                addLog('📝 Please sign in Phantom wallet...');
+                const txBuffer = Uint8Array.from(atob(result.transaction), c => c.charCodeAt(0));
+                const tx = solanaWeb3.Transaction.from(txBuffer);
+                
+                const signed = await wallet.signTransaction(tx);
+                
+                addLog('📡 Sending transaction to Solana...');
+                const connection = new solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
+                const signature = await connection.sendRawTransaction(signed.serialize());
+                
+                addLog(`⏳ Confirming transaction...`);
+                await connection.confirmTransaction(signature, 'confirmed');
+                
+                addLog(`✅ RESERVE SUCCESS!`, 'success');
+                addLog(`   Signature: ${signature}`, 'success');
+                addLog(`   View: https://solscan.io/tx/${signature}?cluster=devnet`, 'info');
+                
+                commitBtn.disabled = false;
+                
+            } catch (err) {
+                addLog(`❌ Reserve failed: ${err.message}`, 'error');
+                if (err.logs) {
+                    err.logs.forEach(l => addLog(`   ${l}`, 'error'));
+                }
+                reserveBtn.disabled = false;
+            }
+        };
+        
+        commitBtn.onclick = async () => {
+            try {
+                commitBtn.disabled = true;
+                addLog('🔄 Building Commit transaction...');
+                
+                const response = await fetch('http://localhost:3000/api/trade/commit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user: wallet.publicKey.toString(),
+                        holdId: holdId
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    addLog(`❌ Commit failed: ${result.error}`, 'error');
+                    commitBtn.disabled = false;
+                    return;
+                }
+                
+                addLog(`✅ Transaction built for Hold ID: ${holdId}`, 'success');
+                
+                // Sign and send
+                addLog('📝 Please sign in Phantom wallet...');
+                const txBuffer = Uint8Array.from(atob(result.transaction), c => c.charCodeAt(0));
+                const tx = solanaWeb3.Transaction.from(txBuffer);
+                
+                const signed = await wallet.signTransaction(tx);
+                
+                addLog('📡 Sending transaction to Solana...');
+                const connection = new solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
+                const signature = await connection.sendRawTransaction(signed.serialize());
+                
+                addLog(`⏳ Confirming transaction...`);
+                await connection.confirmTransaction(signature, 'confirmed');
+                
+                addLog(`✅ COMMIT SUCCESS! TRADE EXECUTED!`, 'success');
+                addLog(`   Signature: ${signature}`, 'success');
+                addLog(`   View: https://solscan.io/tx/${signature}?cluster=devnet`, 'info');
+                
+                // Reset
+                holdId = null;
+                reserveBtn.disabled = false;
+                commitBtn.disabled = true;
+                
+            } catch (err) {
+                addLog(`❌ Commit failed: ${err.message}`, 'error');
+                if (err.logs) {
+                    err.logs.forEach(l => addLog(`   ${l}`, 'error'));
+                }
+                commitBtn.disabled = false;
+            }
+        };
+    </script>
+</body>
+</html>
+
