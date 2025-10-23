@@ -1,174 +1,157 @@
-# Deploy Updated Slab Program - Manual Steps
+# 🚀 Deploy to Production NOW
 
-## Current Situation
+## Fastest Way (5 Minutes)
 
-- ✅ Code modified with auto-account creation
-- ✅ Compilation errors fixed (Pubkey import, NULL_IDX → u32::MAX)
-- ❌ Program not yet deployed (still seeing old error)
+### Step 1: Deploy Backend to Render
 
-## 🚀 Deploy Right Now - Simple Steps
+1. **Go to**: https://render.com/dashboard
+2. **Click**: "New +" → "Blueprint"
+3. **Connect**: Your GitHub repo `HaidarIDK/PERColator`
+4. **Click**: "Apply" (it will read `render.yaml`)
+5. **Wait**: 5-10 minutes for deployment
+6. **Copy**: Your backend URL (e.g., `https://percolator-api.onrender.com`)
 
-### Method 1: WSL (Copy-Paste These Commands)
+### Step 2: Deploy Frontend to Vercel
 
-Open WSL terminal and paste these commands one by one:
+1. **Go to**: https://vercel.com/new
+2. **Import**: `HaidarIDK/PERColator` from GitHub
+3. **Configure**:
+   - Root Directory: `frontend`
+   - Framework: Next.js (auto-detected)
+4. **Environment Variables** (paste all at once):
+   ```
+   NEXT_PUBLIC_SLAB_PROGRAM_ID=SLAB98WHcToiuUMMX9NQSg5E5iB8CjpK21T4h9ZXiep
+   NEXT_PUBLIC_SLAB_ACCOUNT=5Yd2fL7f1DhmNL3u82ptZ21CUpFJHYs1Fqfg2Qs9CLDB
+   NEXT_PUBLIC_INSTRUMENT_ID=G4Um9dNaWKDwd2bhLTEX3DCLRLVWixKvZ1WdEcq6pgfN
+   NEXT_PUBLIC_ROUTER_PROGRAM_ID=RoutqcxkpVH8jJ2cULG9u6WbdRskQwXkJe8CqZehcyr
+   NEXT_PUBLIC_ROUTER_REGISTRY=DK9uaWYienaQ6XEFBzsGCuKZ8ZapTMjw7Ht3s9HQMdUx
+   NEXT_PUBLIC_AUTHORITY=pErcnK9NSVQQK54BsKV4tUt8YWiKngubpJ7jxHrFtvL
+   NEXT_PUBLIC_SOLANA_NETWORK=devnet
+   NEXT_PUBLIC_SOLANA_RPC_URL=https://api.devnet.solana.com
+   NEXT_PUBLIC_API_URL=https://percolator-api.onrender.com
+   ```
+   
+   **Important**: Replace `percolator-api.onrender.com` with your actual Render backend URL!
+
+5. **Click "Deploy"**
+6. **Wait**: 2-3 minutes
+7. **Done!** Frontend is live at `https://your-app.vercel.app` ✅
+
+### Step 3: Update Backend CORS
+
+1. **In your code**, update `api/src/index.ts`:
+   ```typescript
+   const allowedOrigins = [
+     'http://localhost:3001',
+     'https://your-app.vercel.app',  // ← ADD YOUR VERCEL URL HERE
+     // ... rest
+   ];
+   ```
+
+2. **Push to GitHub**:
+   ```bash
+   git add api/src/index.ts
+   git commit -m "Add production frontend URL to CORS"
+   git push origin master
+   ```
+
+3. **Render auto-redeploys** (2 minutes)
+
+---
+
+## ✅ Your DEX is LIVE!
+
+Visit your Vercel URL and:
+- ✅ **HTTPS enabled** → Phantom works perfectly!
+- ✅ **Global CDN** → Fast worldwide
+- ✅ **Auto-scaling** → Handles traffic
+- ✅ **Free tier** → No cost to start
+
+**Share your URL** with anyone who wants to trade! 🌍
+
+---
+
+## 🎯 After Deployment
+
+### Update Frontend URL in Backend
+
+1. Go to **Render Dashboard**
+2. Your **percolator-api** service
+3. **Environment** → Add/Update:
+   - Key: `FRONTEND_URL`
+   - Value: `https://your-app.vercel.app`
+4. **Save** (auto-redeploys)
+
+### Test Production
+
+1. **Visit**: `https://your-app.vercel.app/trade`
+2. **Connect Phantom** (should work perfectly on HTTPS!)
+3. **Make sure wallet is on Devnet**
+4. **Place a trade**
+5. **Success!** 🎉
+
+---
+
+## 🔄 Auto-Deployments
+
+Both platforms auto-deploy on git push:
 
 ```bash
-# Step 1: Set PATH
-export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-
-# Step 2: Go to project
-cd /mnt/c/Users/7haid/OneDrive/Desktop/percolator
-
-# Step 3: Build
-cargo build-sbf --manifest-path programs/slab/Cargo.toml
-
-# Step 4: Set to devnet
-solana config set --url https://api.devnet.solana.com
-
-# Step 5: Deploy
-solana program deploy target/deploy/percolator_slab.so
-
-# COPY THE PROGRAM ID FROM OUTPUT!
+git add .
+git commit -m "Update trading UI"
+git push origin master
 ```
 
-**After running, you'll see:**
-```
-Program Id: 6EF2acRfPejnxXYd9apKc2wb3p2NLG8rKgWbCfp5G7Uz
-```
-
-If it's the SAME ID → Perfect! Just wait 2 minutes for RPC cache to update.
-
-If it's a DIFFERENT ID → Update backend config (see below).
+- **Vercel**: Redeploys in ~2 minutes
+- **Render**: Redeploys in ~5 minutes
 
 ---
 
-## If Program ID Changes
+## 💰 Free Tier Limits
 
-### Update Backend
+### Vercel:
+- ✅ Unlimited bandwidth
+- ✅ Unlimited requests
+- ✅ 100GB bandwidth/month
+- ✅ Automatic HTTPS
+- ✅ Global CDN
 
-**File: `api/src/services/transactions.ts`**
+### Render (Free Tier):
+- ✅ 750 hours/month (enough for 24/7)
+- ⚠️ Sleeps after 15 min inactivity
+- ⚠️ Cold starts take ~30 seconds
+- ✅ Automatic HTTPS
+- ✅ Custom domains
 
-Find line ~17 and update:
-```typescript
-export const SLAB_PROGRAM_ID = new PublicKey(
-  process.env.SLAB_PROGRAM_ID || 'PUT_NEW_PROGRAM_ID_HERE'
-);
-```
-
-### Restart Backend
-```bash
-# Stop current backend (Ctrl+C in the terminal running it)
-# Then:
-cd api
-npm run dev
-```
-
-### Reinitialize Slab Account
-
-Since you have a new program, you need a new Slab account:
-
-```bash
-cd scripts
-npx tsx initialize-slab.ts
-```
-
-**Copy the new Slab account address** from output, then update:
-
-**File: `api/src/services/transactions.ts`**
-```typescript
-export const SLAB_ACCOUNT = new PublicKey(
-  process.env.SLAB_ACCOUNT || 'PUT_NEW_SLAB_ACCOUNT_HERE'
-);
-```
-
-Restart backend again.
+**Upgrade to paid**: $7/month for always-on backend
 
 ---
 
-## Alternative: Quick POC Test Without Deployment
+## 🚀 Production Mainnet (Optional)
 
-If deployment is having issues, here's a SUPER QUICK workaround to test the UI:
+When you're ready for real money:
 
-### Make Backend Return Success (Mock Mode)
-
-**File: `api/src/routes/trading.ts`**
-
-At the very top of the `/reserve` endpoint (line ~101), add:
-
-```typescript
-tradingRouter.post('/reserve', async (req, res) => {
-  // TEMP: Mock success for UI testing
-  return res.json({
-    success: true,
-    needsSigning: false,
-    holdId: Math.floor(Math.random() * 1000000),
-    vwapPrice: req.body.price,
-    worstPrice: req.body.price,
-    maxCharge: req.body.price * req.body.quantity,
-    message: 'Mock Reserve - UI test mode'
-  });
-  
-  // ... rest of actual code
-```
-
-And for `/commit`:
-
-```typescript
-tradingRouter.post('/commit', async (req, res) => {
-  // TEMP: Mock success for UI testing  
-  return res.json({
-    success: true,
-    needsSigning: false,
-    signature: '1111111111111111111111111111111111111111111111111111111111111111',
-    message: 'Mock Commit - UI test mode'
-  });
-  
-  // ... rest of actual code
-```
-
-This lets you test the full UI flow without blockchain interaction.
+1. **Deploy programs to mainnet-beta**
+2. **Update environment variables**:
+   ```
+   NEXT_PUBLIC_SOLANA_NETWORK=mainnet-beta
+   NEXT_PUBLIC_SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+   ```
+3. **Use production RPC provider** (Helius, QuickNode)
+4. **Test thoroughly first!**
 
 ---
 
-## 📊 Verification
+## 📱 Custom Domain (Optional)
 
-### After Deployment, Test:
-
-1. **Refresh browser** (Ctrl + Shift + R)
-2. **Connect Phantom**
-3. **Try trade:**
-   - Price: 3850 (ETH price)
-   - Amount: 0.01
-   - Click Reserve
-
-4. **Check console logs:**
-   - If you see: `"Program log: Instruction: Reserve"` → Program is running
-   - If you see: `"Program log: Error: Account has invalid owner"` → Old code (wait longer or check deployment)
-   - If you see: `"Reserve successful"` → NEW CODE WORKING! ✅
+### Vercel:
+1. **Settings** → **Domains**
+2. **Add**: `dex.yourdomain.com`
+3. **Update DNS** (follow Vercel instructions)
+4. **Done!** HTTPS auto-configured
 
 ---
 
-## 🎯 Expected Timeline
+**Deploy in the next 5 minutes!** 🚀
 
-- **Deploy command:** 30 seconds
-- **RPC propagation:** 2-5 minutes
-- **Total:** ~5 minutes from deploy to working
-
-Be patient - Solana RPC caching is real!
-
----
-
-## 🆘 If Still Having Issues
-
-The fastest path forward:
-
-1. **Use mock mode** (see Alternative above) to test UI
-2. **Separately debug deployment** in WSL
-3. **Once deployed, switch back to real mode**
-
-This way you can continue working on the UI/UX while sorting out the deployment!
-
----
-
-**Run those WSL commands now and let's get this deployed!** 🚀
-
+The HTTPS from Vercel/Render will fix the Phantom blocking issue automatically!

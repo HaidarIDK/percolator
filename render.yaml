@@ -1,51 +1,57 @@
-# Render.com Deployment Configuration
-# This file deploys BOTH backend and frontend
-
 services:
-  # Backend API Service
+  # Backend API Server
   - type: web
     name: percolator-api
-    env: node
-    region: oregon  # Change to your preferred region
-    plan: free
+    runtime: node
     rootDir: api
     buildCommand: npm install && npm run build
     startCommand: npm start
+    plan: free
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 3000
-      - key: HOST
-        value: 0.0.0.0
       - key: SOLANA_NETWORK
         value: devnet
       - key: SOLANA_RPC_URL
         value: https://api.devnet.solana.com
       - key: SLAB_PROGRAM_ID
-        value: 6EF2acRfPejnxXYd9apKc2wb3p2NLG8rKgWbCfp5G7Uz
+        value: SLAB98WHcToiuUMMX9NQSg5E5iB8CjpK21T4h9ZXiep
+      - key: SLAB_ACCOUNT
+        value: 5Yd2fL7f1DhmNL3u82ptZ21CUpFJHYs1Fqfg2Qs9CLDB
+      - key: INSTRUMENT_ID
+        value: G4Um9dNaWKDwd2bhLTEX3DCLRLVWixKvZ1WdEcq6pgfN
       - key: ROUTER_PROGRAM_ID
-        value: 9CQWTSDobkHqWzvx4nufdke4C8GKuoaqiNBBLEYFoHoG
-    healthCheckPath: /api/health
+        value: RoutqcxkpVH8jJ2cULG9u6WbdRskQwXkJe8CqZehcyr
+      - key: ROUTER_REGISTRY
+        value: DK9uaWYienaQ6XEFBzsGCuKZ8ZapTMjw7Ht3s9HQMdUx
 
-  # Frontend Dashboard Service
+  # Frontend Next.js App
   - type: web
     name: percolator-frontend
-    env: node
-    region: oregon  # Same region as backend for lower latency
-    plan: free
+    runtime: node
     rootDir: frontend
     buildCommand: npm install && npm run build
     startCommand: npm start
+    plan: free
     envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 3000
-      # ⚠️ UPDATE THIS after deploying backend!
-      # Replace with your actual backend URL from Render
+      - key: NEXT_PUBLIC_SLAB_PROGRAM_ID
+        value: SLAB98WHcToiuUMMX9NQSg5E5iB8CjpK21T4h9ZXiep
+      - key: NEXT_PUBLIC_SLAB_ACCOUNT
+        value: 5Yd2fL7f1DhmNL3u82ptZ21CUpFJHYs1Fqfg2Qs9CLDB
+      - key: NEXT_PUBLIC_INSTRUMENT_ID
+        value: G4Um9dNaWKDwd2bhLTEX3DCLRLVWixKvZ1WdEcq6pgfN
+      - key: NEXT_PUBLIC_ROUTER_PROGRAM_ID
+        value: RoutqcxkpVH8jJ2cULG9u6WbdRskQwXkJe8CqZehcyr
+      - key: NEXT_PUBLIC_ROUTER_REGISTRY
+        value: DK9uaWYienaQ6XEFBzsGCuKZ8ZapTMjw7Ht3s9HQMdUx
+      - key: NEXT_PUBLIC_AUTHORITY
+        value: pErcnK9NSVQQK54BsKV4tUt8YWiKngubpJ7jxHrFtvL
+      - key: NEXT_PUBLIC_SOLANA_NETWORK
+        value: devnet
+      - key: NEXT_PUBLIC_SOLANA_RPC_URL
+        value: https://api.devnet.solana.com
       - key: NEXT_PUBLIC_API_URL
-        value: https://percolator-api.onrender.com
-      - key: NEXT_PUBLIC_WS_URL
-        value: wss://percolator-api.onrender.com/ws
-
+        sync: false
+        # Will be set to: https://percolator-api.onrender.com (after backend deploys)
