@@ -28,6 +28,27 @@ const activeReservations = new Map<string, {
   expiryMs: number;
 }>();
 
+// Store completed trades for orderbook display
+export const completedTrades: Array<{
+  timestamp: number;
+  user: string;
+  side: 'buy' | 'sell';
+  price: number;
+  quantity: number;
+  signature?: string;
+}> = [];
+
+// Store active orders (reservations that haven't been committed yet)
+export const activeOrders: Array<{
+  holdId: number;
+  user: string;
+  side: 'buy' | 'sell';
+  price: number;
+  quantity: number;
+  timestamp: number;
+  expiryMs: number;
+}> = [];
+
 /**
  * POST /api/trade/order
  * Simplified order placement (hides reserve-commit complexity)
@@ -182,6 +203,17 @@ tradingRouter.post('/reserve', async (req, res) => {
       expiryMs,
     });
 
+    // Add to active orders for orderbook display
+    activeOrders.push({
+      holdId,
+      user,
+      side: side as 'buy' | 'sell',
+      price,
+      quantity,
+      timestamp: Date.now(),
+      expiryMs,
+    });
+
     // Log to monitor
     logTransaction({
       id: Date.now(),
@@ -301,10 +333,18 @@ tradingRouter.post('/commit', async (req, res) => {
       signature: `Trade${reservation.holdId}`,
     });
 
+    // Find and remove from active orders
+    const orderIndex = activeOrders.findIndex(o => o.holdId === reservation.holdId);
+    let orderData = null;
+    if (orderIndex > -1) {
+      orderData = activeOrders[orderIndex];
+      activeOrders.splice(orderIndex, 1);
+    }
+
     // Clean up reservation (in production, keep for a while for replay protection)
     activeReservations.delete(reservationKey);
 
-    // Return transaction
+    // Return transaction with order data for frontend to track
     res.json({
       success: true,
       transaction: serializedTx,
@@ -314,6 +354,7 @@ tradingRouter.post('/commit', async (req, res) => {
       filledQty: reservation.filledQty,
       totalCost: reservation.filledQty * reservation.vwapPrice,
       message: 'Sign and submit this transaction to commit the trade',
+      orderData, // Include order data so frontend can add to completed trades
     });
   } catch (error: any) {
     console.error('Commit error:', error);
@@ -503,6 +544,39 @@ tradingRouter.get('/reservations/:user', async (req, res) => {
       success: true,
       reservations: userReservations,
     });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/trade/record-fill
+ * Record a successful trade (called by frontend after commit confirmation)
+ */
+tradingRouter.post('/record-fill', async (req, res) => {
+  try {
+    const { user, side, price, quantity, signature } = req.body;
+
+    if (!user || !side || !price || !quantity) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Add to completed trades
+    completedTrades.push({
+      timestamp: Date.now(),
+      user,
+      side,
+      price,
+      quantity,
+      signature,
+    });
+
+    // Keep only last 100 trades
+    if (completedTrades.length > 100) {
+      completedTrades.shift();
+    }
+
+    res.json({ success: true, message: 'Trade recorded' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

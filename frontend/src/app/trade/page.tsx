@@ -24,6 +24,7 @@ export default function SimpleTradePage() {
   
   // Order book state for YOUR Slab account
   const [orderbook, setOrderbook] = useState<any>(null)
+  const [recentTrades, setRecentTrades] = useState<any[]>([])
   const [balance, setBalance] = useState<number>(0)
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
 
@@ -46,6 +47,7 @@ export default function SimpleTradePage() {
           console.log(`   Orders: ${data.orderbook.bids.length} bids, ${data.orderbook.asks.length} asks`)
           
           setOrderbook(data.orderbook)
+          setRecentTrades(data.recentTrades || [])
           setLastUpdate(new Date())
         }
       } catch (error) {
@@ -170,6 +172,23 @@ export default function SimpleTradePage() {
           const connection = new Connection(clusterApiUrl('devnet'), 'confirmed')
           const signature = await connection.sendRawTransaction(signedTx.serialize())
           await connection.confirmTransaction(signature, 'confirmed')
+          
+          // Record the successful trade
+          try {
+            await fetch(`${API_URL}/api/trade/record-fill`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                user: publicKey.toBase58(),
+                side: result.orderData?.side || side,
+                price: result.vwapPrice || parseFloat(price),
+                quantity: result.filledQty || parseFloat(amount),
+                signature
+              })
+            });
+          } catch (recordError) {
+            console.error('Failed to record trade:', recordError);
+          }
           
           toast({ 
             type: 'success', 
@@ -327,6 +346,30 @@ export default function SimpleTradePage() {
                   )}
                 </div>
               </div>
+
+              {/* Recent Trades */}
+              {recentTrades.length > 0 && (
+                <div className="mt-6">
+                  <h4 className="text-sm font-semibold text-zinc-400 mb-3">Recent Trades</h4>
+                  <div className="space-y-2">
+                    {recentTrades.map((trade, i) => (
+                      <div 
+                        key={i}
+                        className="flex items-center justify-between text-xs p-2 bg-zinc-800/50 rounded border border-zinc-700/50"
+                      >
+                        <span className={trade.side === 'buy' ? 'text-green-400' : 'text-red-400'}>
+                          {trade.side.toUpperCase()}
+                        </span>
+                        <span className="text-white font-mono">{trade.quantity.toFixed(4)}</span>
+                        <span className="text-zinc-400">@ ${trade.price.toFixed(2)}</span>
+                        <span className="text-zinc-500 text-[10px]">
+                          {new Date(trade.timestamp).toLocaleTimeString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Pool Info */}
               <div className="mt-6 p-4 bg-blue-600/10 border border-blue-500/30 rounded-lg">

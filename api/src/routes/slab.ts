@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { PublicKey, Connection } from '@solana/web3.js';
+import { activeOrders, completedTrades } from './trading';
 
 export const slabRouter = Router();
 
@@ -54,7 +55,27 @@ slabRouter.get('/orderbook', async (req, res) => {
     // - Reservations pool
     // - etc.
     
-    // For now, return empty book (will populate as users trade)
+    // Build orderbook from active orders
+    const now = Date.now();
+    const validOrders = activeOrders.filter(o => o.expiryMs > now);
+    
+    // Separate bids and asks
+    const bids = validOrders
+      .filter(o => o.side === 'buy')
+      .map(o => ({ price: o.price, quantity: o.quantity, user: o.user.substring(0, 6) + '...' }))
+      .sort((a, b) => b.price - a.price); // Descending
+    
+    const asks = validOrders
+      .filter(o => o.side === 'sell')
+      .map(o => ({ price: o.price, quantity: o.quantity, user: o.user.substring(0, 6) + '...' }))
+      .sort((a, b) => a.price - b.price); // Ascending
+    
+    // Calculate mid price and spread
+    const bestBid = bids.length > 0 ? bids[0].price : 0;
+    const bestAsk = asks.length > 0 ? asks[0].price : 0;
+    const midPrice = (bestBid && bestAsk) ? (bestBid + bestAsk) / 2 : (bestBid || bestAsk || 0);
+    const spread = (bestBid && bestAsk) ? ((bestAsk - bestBid) / midPrice) * 100 : 0;
+    
     res.json({
       success: true,
       slabAccount: SLAB_ACCOUNT.toBase58(),
@@ -63,13 +84,16 @@ slabRouter.get('/orderbook', async (req, res) => {
       lamports: accountInfo.lamports,
       owner: accountInfo.owner.toBase58(),
       orderbook: {
-        bids: [], // TODO: Parse from account data
-        asks: [], // TODO: Parse from account data
-        midPrice: 0,
-        spread: 0,
+        bids,
+        asks,
+        midPrice,
+        spread,
         lastUpdate: Date.now()
       },
-      message: 'Slab account initialized. Order book empty - make your first trade!'
+      recentTrades: completedTrades.slice(-10).reverse(), // Last 10 trades, newest first
+      message: validOrders.length > 0 
+        ? `${bids.length} bids, ${asks.length} asks in orderbook` 
+        : 'Order book empty - make your first trade!'
     });
     
   } catch (error: any) {
