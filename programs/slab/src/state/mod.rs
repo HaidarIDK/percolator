@@ -1,7 +1,6 @@
-pub mod header;
 pub mod slab;
-pub mod pools;
 
-pub use header::*;
 pub use slab::*;
-pub use pools::*;
+
+// Re-export from common
+pub use percolator_common::{SlabHeader, QuoteCache, QuoteLevel, FillReceipt};

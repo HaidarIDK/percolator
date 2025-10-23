@@ -173,7 +173,9 @@ async function fetchHyperliquidCandles(coin: string, interval: string, limit: nu
       startTime = from;
       endTime = to;
     } else {
-      const intervalMs = parseInt(interval.replace(/[^\d]/g, '')) * 60 * 1000; // Convert to milliseconds
+      // Calculate based on interval
+      const intervalMinutes = parseInt(interval.replace(/[^\d]/g, ''));
+      const intervalMs = intervalMinutes * 60 * 1000;
       startTime = now - (limit * intervalMs);
       endTime = now;
     }
@@ -188,7 +190,9 @@ async function fetchHyperliquidCandles(coin: string, interval: string, limit: nu
       }
     };
     
-    console.log(`Fetching Hyperliquid candles for ${coin} ${interval}:`, payload);
+    console.log(`📊 Fetching Hyperliquid candles for ${coin} ${interval}`);
+    console.log(`   Time range: ${new Date(startTime).toISOString()} -> ${new Date(endTime).toISOString()}`);
+    console.log(`   Payload:`, JSON.stringify(payload));
     
     const response = await fetch('https://api.hyperliquid.xyz/info', {
       method: 'POST',
@@ -199,12 +203,27 @@ async function fetchHyperliquidCandles(coin: string, interval: string, limit: nu
     });
     
     if (!response.ok) {
-      console.error(`Hyperliquid API error: ${response.status} ${response.statusText}`);
-      throw new Error(`Hyperliquid API error: ${response.status}`);
+      const errorText = await response.text();
+      console.error(`❌ Hyperliquid API error: ${response.status} ${response.statusText}`);
+      console.error(`   Response: ${errorText}`);
+      throw new Error(`Hyperliquid API error: ${response.status} - ${errorText}`);
     }
     
     const data = await response.json() as any[];
-    console.log(`Hyperliquid response for ${coin}:`, data.length, 'candles');
+    
+    // Check if response is an error object
+    if (!Array.isArray(data)) {
+      console.error(`❌ Hyperliquid returned non-array:`, data);
+      throw new Error(`Hyperliquid returned invalid data format`);
+    }
+    
+    if (data.length === 0) {
+      console.warn(`⚠️  Hyperliquid returned 0 candles for ${coin} ${interval}`);
+    } else {
+      console.log(`✅ Hyperliquid response: ${data.length} candles`);
+      console.log(`   First candle: ${new Date(data[0].t).toISOString()} - $${data[0].c}`);
+      console.log(`   Last candle: ${new Date(data[data.length - 1].t).toISOString()} - $${data[data.length - 1].c}`);
+    }
     
     // Transform Hyperliquid format to our format
     return data.map((candle: any) => ({
@@ -217,7 +236,7 @@ async function fetchHyperliquidCandles(coin: string, interval: string, limit: nu
     }));
     
   } catch (error) {
-    console.error('Failed to fetch Hyperliquid candles:', error);
+    console.error('❌ Failed to fetch Hyperliquid candles:', error);
     throw error;
   }
 }

@@ -12,20 +12,23 @@ import {
 } from '@solana/web3.js';
 import BN from 'bn.js';
 
-// Router Program ID (deployed on devnet)
-export const ROUTER_PROGRAM_ID = new PublicKey(
-  process.env.ROUTER_PROGRAM_ID || '9CQWTSDobkHqWzvx4nufdke4C8GKuoaqiNBBLEYFoHoG'
-);
+// Router Program ID (set via environment variable)
+// Will be set when you deploy your new router program
+export const ROUTER_PROGRAM_ID = process.env.ROUTER_PROGRAM_ID 
+  ? new PublicKey(process.env.ROUTER_PROGRAM_ID)
+  : null;
 
-// Slab Program ID
-export const SLAB_PROGRAM_ID = new PublicKey(
-  process.env.SLAB_PROGRAM_ID || '6EF2acRfPejnxXYd9apKc2wb3p2NLG8rKgWbCfp5G7Uz'
-);
+// Slab Program ID (set via environment variable)
+// Will be set when you deploy your new slab program
+export const SLAB_PROGRAM_ID = process.env.SLAB_PROGRAM_ID
+  ? new PublicKey(process.env.SLAB_PROGRAM_ID)
+  : null;
 
-// Slab Account
-export const SLAB_ACCOUNT = new PublicKey(
-  process.env.SLAB_ACCOUNT || '79DUPoYSvfrsHTGHUZDtb98vGA5tzKUAVQyYSxsVX8fk'
-);
+// Slab Account (set via environment variable)
+// Will be created when you initialize your new slab
+export const SLAB_ACCOUNT = process.env.SLAB_ACCOUNT
+  ? new PublicKey(process.env.SLAB_ACCOUNT)
+  : null;
 
 /**
  * Router instruction discriminators

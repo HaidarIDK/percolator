@@ -1,24 +1,22 @@
-#![no_std]
+#![cfg_attr(target_os = "solana", no_std)]
 
-#[cfg(all(target_os = "solana", feature = "bpf-entrypoint"))]
+pub mod state;
+pub mod instructions;
+pub mod pda;
+pub mod liquidation;
+pub mod chooser;
+
+// Always expose entrypoint for testing, but only register as entrypoint when feature enabled
+pub mod entrypoint;
+
+// Panic handler for no_std builds (only for Solana BPF)
+#[cfg(all(target_os = "solana", not(test)))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
-pub mod state;
-pub mod instructions;
-pub mod pda;
-pub mod init;
-
-#[cfg(feature = "bpf-entrypoint")]
-pub mod entrypoint;
-
-#[cfg(feature = "bpf-entrypoint")]
-pinocchio::entrypoint!(entrypoint::process_instruction);
-
 pub use state::*;
 pub use instructions::*;
-pub use init::*;
 
 pinocchio_pubkey::declare_id!("RoutR1VdCpHqj89WEMJhb6TkGT9cPfr1rVjhM3e2YQr");

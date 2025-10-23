@@ -1,183 +1,80 @@
-//! Main slab state structure
+//! Slab state - v0 minimal single-account orderbook
 
-use super::header::SlabHeader;
-use super::pools::Pool;
-use percolator_common::*;
+use super::{SlabHeader, QuoteCache};
 
-/// Main Slab state (~70 KB contiguous memory, ULTRA-CHEAP: ~0.5 SOL rent!)
-/// Layout: Header + Pools + Data
+/// Book area - simplified price-time orderbook
+/// In v0, this is a stub placeholder for future book implementation
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct BookArea {
+    /// Placeholder data for book (3KB)
+    pub data: [u8; 3072],
+}
+
+impl BookArea {
+    pub fn new() -> Self {
+        Self {
+            data: [0; 3072],
+        }
+    }
+}
+
+/// Main slab state - v0 minimal structure (~4KB)
+/// Layout: Header (256B) + QuoteCache (256B) + BookArea (3KB)
 #[repr(C)]
 pub struct SlabState {
-    /// Header with metadata
+    /// Header with metadata and offsets
     pub header: SlabHeader,
-
-    /// Account pool
-    pub accounts: [AccountState; MAX_ACCOUNTS],
-
-    /// Instrument pool (small, fixed size)
-    pub instruments: [Instrument; MAX_INSTRUMENTS],
-    pub instrument_count: u16,
-
-    /// DLP bitset/list
-    pub dlp_accounts: [u32; MAX_DLP],
-
-    /// Order pool
-    pub orders: Pool<Order, MAX_ORDERS>,
-
-    /// Position pool
-    pub positions: Pool<Position, MAX_POSITIONS>,
-
-    /// Reservation pool
-    pub reservations: Pool<Reservation, MAX_RESERVATIONS>,
-
-    /// Slice pool
-    pub slices: Pool<Slice, MAX_SLICES>,
-
-    /// Trade ring buffer
-    pub trades: [Trade; MAX_TRADES],
-    pub trade_head: u32,
-    pub trade_count: u32,
-
-    /// Aggressor ledger pool (shared, not per account)
-    pub aggressor_ledger: Pool<AggressorEntry, MAX_AGGRESSOR_ENTRIES>,
+    /// Quote cache (router-readable)
+    pub quote_cache: QuoteCache,
+    /// Book area (price-time queues)
+    pub book: BookArea,
 }
 
 impl SlabState {
-    /// Get instrument by index
-    pub fn get_instrument(&self, idx: u16) -> Option<&Instrument> {
-        if idx < self.instrument_count {
-            Some(&self.instruments[idx as usize])
-        } else {
-            None
+    /// Size of the slab state
+    pub const LEN: usize = core::mem::size_of::<Self>();
+
+    /// Create new slab state
+    pub fn new(header: SlabHeader) -> Self {
+        Self {
+            header,
+            quote_cache: QuoteCache::new(),
+            book: BookArea::new(),
         }
-    }
-
-    /// Get mutable instrument by index
-    pub fn get_instrument_mut(&mut self, idx: u16) -> Option<&mut Instrument> {
-        if idx < self.instrument_count {
-            Some(&mut self.instruments[idx as usize])
-        } else {
-            None
-        }
-    }
-
-    /// Add a new instrument
-    pub fn add_instrument(&mut self, instrument: Instrument) -> Result<u16, ()> {
-        if (self.instrument_count as usize) >= MAX_INSTRUMENTS {
-            return Err(());
-        }
-
-        let idx = self.instrument_count;
-        self.instruments[idx as usize] = instrument;
-        self.instrument_count += 1;
-
-        Ok(idx)
-    }
-
-    /// Record trade in ring buffer
-    pub fn record_trade(&mut self, trade: Trade) {
-        let idx = self.trade_head as usize;
-        self.trades[idx] = trade;
-        self.trade_head = (self.trade_head + 1) % (MAX_TRADES as u32);
-        if (self.trade_count as usize) < MAX_TRADES {
-            self.trade_count += 1;
-        }
-    }
-
-    /// Check if account is DLP
-    pub fn is_dlp(&self, account_idx: u32) -> bool {
-        for i in 0..self.header.dlp_count as usize {
-            if self.dlp_accounts[i] == account_idx {
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Add DLP account
-    pub fn add_dlp(&mut self, account_idx: u32) -> Result<(), ()> {
-        if (self.header.dlp_count as usize) >= MAX_DLP {
-            return Err(());
-        }
-
-        // Check if already exists
-        if self.is_dlp(account_idx) {
-            return Ok(());
-        }
-
-        self.dlp_accounts[self.header.dlp_count as usize] = account_idx;
-        self.header.dlp_count += 1;
-        Ok(())
-    }
-
-    /// Get account by index
-    pub fn get_account(&self, idx: u32) -> Option<&AccountState> {
-        if (idx as usize) < MAX_ACCOUNTS && self.accounts[idx as usize].active {
-            Some(&self.accounts[idx as usize])
-        } else {
-            None
-        }
-    }
-
-    /// Get mutable account by index
-    pub fn get_account_mut(&mut self, idx: u32) -> Option<&mut AccountState> {
-        if (idx as usize) < MAX_ACCOUNTS && self.accounts[idx as usize].active {
-            Some(&mut self.accounts[idx as usize])
-        } else {
-            None
-        }
-    }
-
-    /// Find or create account
-    pub fn find_or_create_account(&mut self, pubkey: &pinocchio::pubkey::Pubkey) -> Result<u32, ()> {
-        // First try to find existing
-        for i in 0..MAX_ACCOUNTS {
-            if self.accounts[i].active && &self.accounts[i].key == pubkey {
-                return Ok(i as u32);
-            }
-        }
-
-        // Find first inactive slot
-        for i in 0..MAX_ACCOUNTS {
-            if !self.accounts[i].active {
-                self.accounts[i] = AccountState {
-                    key: *pubkey,
-                    cash: 0,
-                    im: 0,
-                    mm: 0,
-                    position_head: u32::MAX,
-                    index: i as u32,
-                    active: true,
-                    _padding: [0; 7],
-                };
-                return Ok(i as u32);
-            }
-        }
-
-        Err(())
     }
 }
-
-// Size validation
-const _: () = {
-    const SLAB_SIZE: usize = core::mem::size_of::<SlabState>();
-    const MAX_SIZE: usize = 128 * 1024; // 128 KB
-
-    // This will fail to compile if SlabState exceeds 128 KB
-    if SLAB_SIZE > MAX_SIZE {
-        panic!("SlabState exceeds 128 KB limit");
-    }
-};
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pinocchio::pubkey::Pubkey;
 
     #[test]
     fn test_slab_size() {
-        let size = core::mem::size_of::<SlabState>();
-        // Size should be ~50-80 KB (ULTRA-cheap: ~0.5 SOL rent!)
-        assert!(size > 40_000, "Size too small: {} bytes", size);
-        assert!(size < 100_000, "Size too large: {} bytes", size);
+        use core::mem::size_of;
+        let actual_size = size_of::<SlabState>();
+
+        // Should be around 4KB for v0
+        assert!(actual_size < 5000, "SlabState is {} bytes, should be < 5KB", actual_size);
+        assert!(actual_size > 3000, "SlabState is {} bytes, should be > 3KB", actual_size);
+    }
+
+    #[test]
+    fn test_slab_creation() {
+        let header = SlabHeader::new(
+            Pubkey::default(),
+            Pubkey::default(),
+            Pubkey::default(),
+            Pubkey::default(),
+            50_000_000_000,
+            20,
+            1_000_000,
+            255,
+        );
+
+        let slab = SlabState::new(header);
+        assert_eq!(slab.header.seqno, 0);
+        assert_eq!(slab.quote_cache.seqno_snapshot, 0);
     }
 }

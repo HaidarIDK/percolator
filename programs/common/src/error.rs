@@ -1,7 +1,5 @@
 //! Error types
 
-use pinocchio::program_error::ProgramError;
-
 /// Program errors
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,17 +12,24 @@ pub enum PercolatorError {
     InsufficientFunds = 4,
     Overflow = 5,
     Underflow = 6,
+    Unauthorized = 7,
 
     // Router errors (100-199)
     InvalidSlab = 100,
     SlabNotRegistered = 101,
     SlabVersionMismatch = 102,
-    CapabilityExpired = 103,
-    InvalidScope = 104,
+    CapExpired = 103,
+    CapInvalidScope = 104,
     CapInsufficientRemaining = 105,
     EscrowInsufficientBalance = 106,
     PortfolioInsufficientMargin = 107,
     InvalidPortfolio = 108,
+    CpiFailed = 109,
+    PortfolioHealthy = 110,
+    LiquidationCooldown = 111,
+    InvalidAmount = 112,
+    InsufficientBalance = 113,
+    StalePrice = 114,
 
     // Slab errors (200-299)
     InvalidInstrument = 200,
@@ -40,6 +45,7 @@ pub enum PercolatorError {
     InvalidPrice = 210,
     InvalidQuantity = 211,
     PoolFull = 212,
+    SeqnoMismatch = 213,
 
     // Matching errors (300-399)
     InvalidSide = 300,
@@ -61,13 +67,6 @@ pub enum PercolatorError {
     InvalidCommitment = 503,
     JitPenaltyApplied = 504,
     RoundtripDetected = 505,
-
-    // Liquidation & orchestration errors (600-699)
-    NotLiquidatable = 600,
-    CommitFailed = 601,
-
-    // Authorization errors (700-799)
-    Unauthorized = 700,
 }
 
 impl From<PercolatorError> for u64 {
@@ -76,8 +75,8 @@ impl From<PercolatorError> for u64 {
     }
 }
 
-impl From<PercolatorError> for ProgramError {
-    fn from(e: PercolatorError) -> ProgramError {
-        ProgramError::Custom(e as u32)
+impl From<PercolatorError> for pinocchio::program_error::ProgramError {
+    fn from(e: PercolatorError) -> Self {
+        pinocchio::program_error::ProgramError::from(e as u64)
     }
 }

@@ -13,18 +13,21 @@ import {
 import { getConnection } from './solana';
 import BN from 'bn.js';
 
-// Program IDs - DEPLOYED ON DEVNET! 🚀
-export const SLAB_PROGRAM_ID = new PublicKey(
-  process.env.SLAB_PROGRAM_ID || '6EF2acRfPejnxXYd9apKc2wb3p2NLG8rKgWbCfp5G7Uz'
-);
-export const ROUTER_PROGRAM_ID = new PublicKey(
-  process.env.ROUTER_PROGRAM_ID || '9CQWTSDobkHqWzvx4nufdke4C8GKuoaqiNBBLEYFoHoG'
-);
+// Program IDs (set via environment variables)
+// Will be set when you deploy your new programs
+export const SLAB_PROGRAM_ID = process.env.SLAB_PROGRAM_ID
+  ? new PublicKey(process.env.SLAB_PROGRAM_ID)
+  : null;
 
-// INITIALIZED SLAB ACCOUNT - READY FOR TRADING! 🎉
-export const SLAB_ACCOUNT = new PublicKey(
-  process.env.SLAB_ACCOUNT || '79DUPoYSvfrsHTGHUZDtb98vGA5tzKUAVQyYSxsVX8fk'
-);
+export const ROUTER_PROGRAM_ID = process.env.ROUTER_PROGRAM_ID
+  ? new PublicKey(process.env.ROUTER_PROGRAM_ID)
+  : null;
+
+// Slab Account (set via environment variable)
+// Will be created when you initialize your new slab
+export const SLAB_ACCOUNT = process.env.SLAB_ACCOUNT
+  ? new PublicKey(process.env.SLAB_ACCOUNT)
+  : null;
 
 /**
  * Instruction discriminators

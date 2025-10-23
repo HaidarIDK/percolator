@@ -1,75 +1,45 @@
-/// Router instruction handlers
+/// Router instruction handlers (v0 minimal)
 
+pub mod initialize;
+pub mod initialize_portfolio;
 pub mod deposit;
 pub mod withdraw;
-pub mod initialize;
-pub mod cap_ops;
-pub mod multi_reserve;
-pub mod multi_commit;
-pub mod liquidate;
+pub mod execute_cross_slab;
+pub mod liquidate_user;
+pub mod burn_lp_shares;
+pub mod cancel_lp_orders;
 
+pub use initialize::*;
+pub use initialize_portfolio::*;
 pub use deposit::*;
 pub use withdraw::*;
-pub use initialize::*;
-pub use cap_ops::*;
-pub use multi_reserve::*;
-// Only re-export multi_commit items except burn_cap_and_refund (already in cap_ops)
-pub use multi_commit::{process_multi_commit};
-pub use liquidate::*;
+pub use execute_cross_slab::*;
+pub use liquidate_user::*;
+pub use burn_lp_shares::*;
+pub use cancel_lp_orders::*;
 
-use percolator_common::*;
-
-/// Instruction discriminator
+/// Instruction discriminator (v0 minimal)
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RouterInstruction {
-    /// Initialize router
+    /// Initialize router registry
     Initialize = 0,
-    /// Deposit collateral
-    Deposit = 1,
-    /// Withdraw collateral
-    Withdraw = 2,
-    /// Multi-slab reserve orchestration
-    MultiReserve = 3,
-    /// Multi-slab commit orchestration
-    MultiCommit = 4,
-    /// Liquidation coordinator
-    Liquidate = 5,
+    /// Initialize user portfolio
+    InitializePortfolio = 1,
+    /// Deposit collateral to vault
+    Deposit = 2,
+    /// Withdraw collateral from vault
+    Withdraw = 3,
+    /// Execute cross-slab order (v0 main instruction)
+    ExecuteCrossSlab = 4,
+    /// Liquidate user positions (reduce-only)
+    LiquidateUser = 5,
+    /// Burn AMM LP shares (ONLY way to reduce AMM LP exposure)
+    BurnLpShares = 6,
+    /// Cancel Slab LP orders (ONLY way to reduce Slab LP exposure)
+    CancelLpOrders = 7,
 }
 
-/// Process router instruction
-///
-/// Routes instruction to appropriate handler based on discriminator.
-/// Note: This is a simplified dispatcher - actual BPF entrypoint will
-/// handle account deserialization and validation.
-pub fn process_instruction(
-    instruction: RouterInstruction,
-    _data: &[u8],
-) -> Result<(), PercolatorError> {
-    match instruction {
-        RouterInstruction::Initialize => process_initialize(),
-        RouterInstruction::Deposit => {
-            // TODO: Deserialize vault and amount from _data
-            // process_deposit(vault, amount)
-            Ok(())
-        }
-        RouterInstruction::Withdraw => {
-            // TODO: Deserialize vault and amount from _data
-            // process_withdraw(vault, amount)
-            Ok(())
-        }
-        RouterInstruction::MultiReserve => {
-            // NOTE: This is called from entrypoint with full accounts/data
-            // This simplified dispatcher is for internal routing only
-            Ok(())
-        }
-        RouterInstruction::MultiCommit => {
-            // NOTE: This is called from entrypoint with full accounts/data
-            Ok(())
-        }
-        RouterInstruction::Liquidate => {
-            // NOTE: This is called from entrypoint with full accounts/data
-            Ok(())
-        }
-    }
-}
+// Note: Instruction dispatching is handled in entrypoint.rs
+// The functions in this module are called from the entrypoint after
+// account deserialization and validation.

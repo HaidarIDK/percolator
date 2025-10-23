@@ -47,6 +47,27 @@ pub struct SlabRegistry {
     pub bump: u8,
     /// Padding
     pub _padding: [u8; 5],
+
+    // Liquidation parameters (global)
+    /// Initial margin ratio (basis points, e.g., 500 = 5%)
+    pub imr: u64,
+    /// Maintenance margin ratio (basis points, e.g., 250 = 2.5%)
+    pub mmr: u64,
+    /// Liquidation price band (basis points, e.g., 200 = 2%)
+    pub liq_band_bps: u64,
+    /// Pre-liquidation buffer (equity > MM but < MM + buffer triggers pre-liq)
+    pub preliq_buffer: i128,
+    /// Pre-liquidation tighter band (basis points, e.g., 100 = 1%)
+    pub preliq_band_bps: u64,
+    /// Maximum size router can execute per slab in one tx
+    pub router_cap_per_slab: u64,
+    /// Minimum equity required to provide quotes
+    pub min_equity_to_quote: i128,
+    /// Oracle price tolerance (basis points, e.g., 50 = 0.5%)
+    pub oracle_tolerance_bps: u64,
+    /// Padding for alignment
+    pub _padding2: [u8; 8],
+
     /// Registered slabs
     pub slabs: [SlabEntry; MAX_SLABS],
 }
@@ -54,7 +75,41 @@ pub struct SlabRegistry {
 impl SlabRegistry {
     pub const LEN: usize = core::mem::size_of::<Self>();
 
-    /// Initialize new registry
+    /// Initialize registry in-place (avoids stack allocation)
+    ///
+    /// This method initializes the registry fields directly without creating
+    /// a large temporary struct on the stack (which would exceed BPF's 4KB limit).
+    pub fn initialize_in_place(&mut self, router_id: Pubkey, governance: Pubkey, bump: u8) {
+        self.router_id = router_id;
+        self.governance = governance;
+        self.slab_count = 0;
+        self.bump = bump;
+        self._padding = [0; 5];
+
+        // Initialize liquidation parameters with defaults
+        self.imr = 500;  // 5% initial margin
+        self.mmr = 250;  // 2.5% maintenance margin
+        self.liq_band_bps = 200;  // 2% liquidation band
+        self.preliq_buffer = 10_000_000;  // $10 pre-liquidation buffer (1e6 scale)
+        self.preliq_band_bps = 100;  // 1% pre-liquidation band (tighter)
+        self.router_cap_per_slab = 1_000_000_000;  // 1000 units max per slab
+        self.min_equity_to_quote = 100_000_000;  // $100 minimum equity
+        self.oracle_tolerance_bps = 50;  // 0.5% oracle tolerance
+        self._padding2 = [0; 8];
+
+        // Zero out the slabs array using ptr::write_bytes (efficient and stack-safe)
+        unsafe {
+            core::ptr::write_bytes(
+                self.slabs.as_mut_ptr(),
+                0,
+                MAX_SLABS,
+            );
+        }
+    }
+
+    /// Initialize new registry (for tests only - uses stack)
+    /// Excluded from BPF builds to avoid stack overflow
+    #[cfg(all(test, not(target_os = "solana")))]
     pub fn new(router_id: Pubkey, governance: Pubkey, bump: u8) -> Self {
         Self {
             router_id,
@@ -62,6 +117,15 @@ impl SlabRegistry {
             slab_count: 0,
             bump,
             _padding: [0; 5],
+            imr: 500,
+            mmr: 250,
+            liq_band_bps: 200,
+            preliq_buffer: 10_000_000,
+            preliq_band_bps: 100,
+            router_cap_per_slab: 1_000_000_000,
+            min_equity_to_quote: 100_000_000,
+            oracle_tolerance_bps: 50,
+            _padding2: [0; 8],
             slabs: [SlabEntry {
                 slab_id: Pubkey::default(),
                 version_hash: [0; 32],
@@ -155,6 +219,26 @@ impl SlabRegistry {
         } else {
             Err(())
         }
+    }
+
+    /// Update global liquidation parameters (governance only)
+    pub fn update_liquidation_params(
+        &mut self,
+        imr: u64,
+        mmr: u64,
+        liq_band_bps: u64,
+        preliq_buffer: i128,
+        preliq_band_bps: u64,
+        router_cap_per_slab: u64,
+        oracle_tolerance_bps: u64,
+    ) {
+        self.imr = imr;
+        self.mmr = mmr;
+        self.liq_band_bps = liq_band_bps;
+        self.preliq_buffer = preliq_buffer;
+        self.preliq_band_bps = preliq_band_bps;
+        self.router_cap_per_slab = router_cap_per_slab;
+        self.oracle_tolerance_bps = oracle_tolerance_bps;
     }
 }
 

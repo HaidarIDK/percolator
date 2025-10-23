@@ -10,15 +10,9 @@ doctest = false
 
 [dependencies]
 pinocchio = { workspace = true }
-pinocchio-log = { workspace = true }
 pinocchio-pubkey = { workspace = true }
-pinocchio-system = { workspace = true }
 percolator-common = { path = "../common" }
 
 [features]
-default = ["bpf-entrypoint"]
+default = []
 bpf-entrypoint = []
-no-entrypoint = []
-
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }

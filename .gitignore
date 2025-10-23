@@ -27,6 +27,9 @@ yarn-error.log*
 # Internal notes (not for GitHub)
 INFO.md
 NOTES.md
+UPDATED_TO_OFFICIAL.md
+BUILD_AND_DEPLOY.md
+BEFORE_AND_AFTER.md
 
 # Build artifacts
 *.so
