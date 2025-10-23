@@ -8,7 +8,7 @@ use pinocchio::{
     ProgramResult,
 };
 
-use crate::instructions::{SlabInstruction, process_initialize_slab, process_commit_fill, Side};
+use crate::instructions::{SlabInstruction, process_initialize_slab, process_commit_fill, process_reserve, process_commit, process_cancel, Side};
 use crate::state::SlabState;
 use percolator_common::{PercolatorError, validate_owner, validate_writable, borrow_account_data_mut, InstructionReader};
 
@@ -46,6 +46,18 @@ pub fn process_instruction(
             msg!("Instruction: CommitFill");
             process_commit_fill_inner(program_id, accounts, &instruction_data[1..])
         }
+        SlabInstruction::Reserve => {
+            msg!("Instruction: Reserve");
+            process_reserve_inner(program_id, accounts, &instruction_data[1..])
+        }
+        SlabInstruction::Commit => {
+            msg!("Instruction: Commit");
+            process_commit_inner(program_id, accounts, &instruction_data[1..])
+        }
+        SlabInstruction::Cancel => {
+            msg!("Instruction: Cancel");
+            process_cancel_inner(program_id, accounts, &instruction_data[1..])
+        }
     }
 }
 
@@ -54,8 +66,7 @@ pub fn process_instruction(
 /// Process initialize instruction (v0)
 ///
 /// Expected accounts:
-/// 0. `[writable]` Slab state account (PDA, uninitialized)
-/// 1. `[signer]` Payer/authority
+/// 0. `[writable]` Slab state account (PDA, must be pre-created)
 ///
 /// Expected data layout (121 bytes):
 /// - lp_owner: Pubkey (32 bytes)
@@ -166,4 +177,58 @@ fn process_commit_fill_inner(program_id: &Pubkey, accounts: &[AccountInfo], data
 
     msg!("CommitFill processed successfully");
     Ok(())
+}
+
+/// Process reserve instruction (v0 POC)
+fn process_reserve_inner(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    if accounts.len() < 2 {
+        msg!("Error: Reserve instruction requires at least 2 accounts");
+        return Err(PercolatorError::InvalidInstruction.into());
+    }
+    
+    let slab_account = &accounts[0];
+    let user_account = &accounts[1];
+    
+    process_reserve(program_id, slab_account, user_account, instruction_data)
+        .map_err(|e| e.into())
+}
+
+/// Process commit instruction (v0 POC)
+fn process_commit_inner(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    if accounts.len() < 2 {
+        msg!("Error: Commit instruction requires at least 2 accounts");
+        return Err(PercolatorError::InvalidInstruction.into());
+    }
+    
+    let slab_account = &accounts[0];
+    let user_account = &accounts[1];
+    
+    process_commit(program_id, slab_account, user_account, instruction_data)
+        .map_err(|e| e.into())
+}
+
+/// Process cancel instruction (v0 POC)
+fn process_cancel_inner(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    if accounts.len() < 2 {
+        msg!("Error: Cancel instruction requires at least 2 accounts");
+        return Err(PercolatorError::InvalidInstruction.into());
+    }
+    
+    let slab_account = &accounts[0];
+    let user_account = &accounts[1];
+    
+    process_cancel(program_id, slab_account, user_account, instruction_data)
+        .map_err(|e| e.into())
 }

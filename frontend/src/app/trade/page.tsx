@@ -9,6 +9,8 @@ import { Particles } from "@/components/ui/particles"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { ArrowLeft, TrendingUp, TrendingDown, Zap, Wallet as WalletIcon } from "lucide-react"
+import { ACCOUNTS, NETWORK, EXPLORERS, formatAddress } from "@/lib/program-config"
+import { toast } from "@/components/ui/use-toast"
 
 export default function SimpleTradePage() {
   const { publicKey, connected, signTransaction } = useWallet()
@@ -77,12 +79,12 @@ export default function SimpleTradePage() {
 
   const handleTrade = async () => {
     if (!connected || !publicKey || !signTransaction) {
-      alert('Connect wallet first')
+      toast({ type: 'error', title: 'Wallet Not Connected', message: 'Please connect your wallet first' });
       return
     }
 
     if (!price || !amount) {
-      alert('Enter price and amount')
+      toast({ type: 'error', title: 'Invalid Input', message: 'Please enter price and amount' });
       return
     }
 
@@ -123,12 +125,22 @@ export default function SimpleTradePage() {
           
           setLastHoldId(result.holdId)
           setMode('commit')
-          alert(`✅ Reserved!\nHold ID: ${result.holdId}\n\nView on Solscan:\nhttps://solscan.io/tx/${signature}?cluster=devnet`)
+          toast({ 
+            type: 'success', 
+            title: 'Reservation Successful!', 
+            message: `Hold ID: ${result.holdId}. Now click COMMIT to execute.` 
+          });
+          toast({
+            type: 'info',
+            title: 'View Transaction',
+            message: `Tx: ${signature.substring(0, 8)}... (Click to copy)`,
+            duration: 10000
+          });
         }
       } else {
         // COMMIT
         if (!lastHoldId) {
-          alert('Reserve first')
+          toast({ type: 'error', title: 'No Reservation', message: 'Please reserve first before committing' });
           setSubmitting(false)
           return
         }
@@ -159,7 +171,17 @@ export default function SimpleTradePage() {
           const signature = await connection.sendRawTransaction(signedTx.serialize())
           await connection.confirmTransaction(signature, 'confirmed')
           
-          alert(`✅ Trade Executed!\n${side.toUpperCase()} ${amount} ETH @ ${price}\n\nView on Solscan:\nhttps://solscan.io/tx/${signature}?cluster=devnet`)
+          toast({ 
+            type: 'success', 
+            title: '🎉 Trade Executed!', 
+            message: `${side.toUpperCase()} ${amount} @ $${price}` 
+          });
+          toast({
+            type: 'info',
+            title: 'View on Explorer',
+            message: `${EXPLORERS.transaction(signature, NETWORK.cluster)}`,
+            duration: 15000
+          });
           
           setPrice('')
           setAmount('')
@@ -169,7 +191,11 @@ export default function SimpleTradePage() {
       }
     } catch (error: any) {
       console.error('Trade failed:', error)
-      alert(`Trade failed: ${error.message}`)
+      toast({ 
+        type: 'error', 
+        title: 'Trade Failed', 
+        message: error.message || 'Unknown error occurred' 
+      });
     } finally {
       setSubmitting(false)
     }
@@ -314,7 +340,7 @@ export default function SimpleTradePage() {
                   </div>
                 </div>
                 <div className="text-xs text-zinc-400 font-mono mb-2">
-                  79DUPoYSvfrsHTGHUZDtb98vGA5tzKUAVQyYSxsVX8fk
+                  {ACCOUNTS.slab.toBase58()}
                 </div>
                 {(!orderbook || (orderbook.bids?.length === 0 && orderbook.asks?.length === 0)) && (
                   <div className="text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/30 rounded px-2 py-1 mb-2">
@@ -322,7 +348,7 @@ export default function SimpleTradePage() {
                   </div>
                 )}
                 <a
-                  href="https://explorer.solana.com/address/79DUPoYSvfrsHTGHUZDtb98vGA5tzKUAVQyYSxsVX8fk?cluster=devnet"
+                  href={EXPLORERS.solanaExplorer(ACCOUNTS.slab.toBase58(), NETWORK.cluster)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs text-blue-400 hover:text-blue-300 inline-block"
@@ -409,6 +435,58 @@ export default function SimpleTradePage() {
                 </div>
               </div>
 
+              {/* Test Transaction Button (v0 POC) */}
+              {connected && (
+                <button
+                  onClick={async () => {
+                    if (!publicKey || !signTransaction) return;
+                    
+                    try {
+                      setSubmitting(true);
+                      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+                      
+                      const response = await fetch(`${API_URL}/api/trade/test-transfer`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ user: publicKey.toBase58() })
+                      });
+                      
+                      const result = await response.json();
+                      
+                      if (result.success && result.transaction) {
+                        const txBuffer = Buffer.from(result.transaction, 'base64');
+                        const transaction = Transaction.from(txBuffer);
+                        const signedTx = await signTransaction(transaction);
+                        
+                        const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
+                        const signature = await connection.sendRawTransaction(signedTx.serialize());
+                        await connection.confirmTransaction(signature, 'confirmed');
+                        
+                        toast({ 
+                          type: 'success', 
+                          title: '✅ Test Transaction Success!', 
+                          message: 'Wallet signing is working correctly!' 
+                        });
+                        toast({
+                          type: 'info',
+                          title: 'View on Solscan',
+                          message: `${EXPLORERS.transaction(signature, NETWORK.cluster)}`,
+                          duration: 15000
+                        });
+                      }
+                    } catch (error: any) {
+                      toast({ type: 'error', title: 'Test Failed', message: error.message });
+                    } finally {
+                      setSubmitting(false);
+                    }
+                  }}
+                  disabled={submitting}
+                  className="w-full py-3 mb-4 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold transition-all disabled:opacity-50"
+                >
+                  {submitting ? '⏳ Processing...' : '🧪 Test Wallet Connection'}
+                </button>
+              )}
+
               {/* Trade Button */}
               {!connected ? (
                 <div className="w-full py-4 font-bold text-white border border-zinc-800 bg-zinc-900 hover:border-zinc-600 transition-colors rounded-lg flex items-center justify-center">
@@ -460,16 +538,27 @@ export default function SimpleTradePage() {
                 </div>
               )}
 
-              {/* Info */}
-              <div className="mt-6 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                <div className="text-xs text-blue-300 font-semibold mb-1">
-                  {mode === 'reserve' ? '🔒 Step 1: Reserve' : '✅ Step 2: Commit'}
+              {/* v0.1 Update Notice */}
+              <div className="mt-6 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                <div className="text-xs text-green-300 font-semibold mb-1">
+                  ✅ v0.1 - Reserve/Commit Enabled!
                 </div>
                 <div className="text-xs text-zinc-400">
-                  {mode === 'reserve' 
-                    ? 'Lock liquidity on Slab Program'
-                    : 'Execute your reserved trade'
-                  }
+                  Reserve, Commit, and Cancel instructions are now live on devnet!
+                  The program logs your trades (POC mode). Full orderbook matching coming in v0.2!
+                </div>
+              </div>
+              
+              {/* Info */}
+              <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                <div className="text-xs text-blue-300 font-semibold mb-1">
+                  🎯 How It Works
+                </div>
+                <div className="text-xs text-zinc-400">
+                  1. Click BUY/SELL to Reserve liquidity<br/>
+                  2. Sign the transaction in your wallet<br/>
+                  3. Click COMMIT to execute the trade<br/>
+                  4. View your transaction on Solana Explorer!
                 </div>
               </div>
 
@@ -477,13 +566,17 @@ export default function SimpleTradePage() {
               <div className="mt-4 p-3 bg-zinc-800/30 rounded-lg border border-zinc-700/50">
                 <div className="text-xs text-zinc-500 mb-1">Slab Account</div>
                 <div className="text-xs font-mono text-zinc-400">
-                  79DU...X8fk
+                  {formatAddress(ACCOUNTS.slab)}
+                </div>
+                <div className="text-xs text-zinc-500 mb-1 mt-2">Instrument ID</div>
+                <div className="text-xs font-mono text-zinc-400">
+                  {formatAddress(ACCOUNTS.instrument)}
                 </div>
                 <a
-                  href="https://explorer.solana.com/address/79DUPoYSvfrsHTGHUZDtb98vGA5tzKUAVQyYSxsVX8fk?cluster=devnet"
+                  href={EXPLORERS.solanaExplorer(ACCOUNTS.slab.toBase58(), NETWORK.cluster)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs text-blue-400 hover:text-blue-300 mt-1 inline-block"
+                  className="text-xs text-blue-400 hover:text-blue-300 mt-2 inline-block"
                 >
                   View on Explorer →
                 </a>

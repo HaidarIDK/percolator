@@ -15,5 +15,5 @@ pub mod state;
 
 pub use state::*;
 
-/// Program ID (will be set during deployment)
-pub const ID: &str = "AMM111111111111111111111111111111111111111";
+/// Program ID - Our generated vanity address
+pub const ID: &str = "AMMjkEeFdasQ8fs9a9HQyJdciPHtDHVEat8yxiXrTP6p";

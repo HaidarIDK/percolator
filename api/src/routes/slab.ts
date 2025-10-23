@@ -3,9 +3,13 @@ import { PublicKey, Connection } from '@solana/web3.js';
 
 export const slabRouter = Router();
 
-// Your initialized Slab account
-const SLAB_ACCOUNT = new PublicKey('79DUPoYSvfrsHTGHUZDtb98vGA5tzKUAVQyYSxsVX8fk');
-const SLAB_PROGRAM_ID = new PublicKey('6EF2acRfPejnxXYd9apKc2wb3p2NLG8rKgWbCfp5G7Uz');
+// Your initialized Slab account (from .env)
+const SLAB_ACCOUNT = new PublicKey(
+  process.env.SLAB_ACCOUNT || '5Yd2fL7f1DhmNL3u82ptZ21CUpFJHYs1Fqfg2Qs9CLDB'
+);
+const SLAB_PROGRAM_ID = new PublicKey(
+  process.env.SLAB_PROGRAM_ID || 'SLAB98WHcToiuUMMX9NQSg5E5iB8CjpK21T4h9ZXiep'
+);
 
 /**
  * GET /api/slab/orderbook

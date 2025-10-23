@@ -16,14 +16,13 @@ import {
 } from '@solana/web3.js';
 import * as fs from 'fs';
 
-// Program IDs (deployed on devnet)
-const SLAB_PROGRAM_ID = new PublicKey('6EF2acRfPejnxXYd9apKc2wb3p2NLG8rKgWbCfp5G7Uz');
-const ROUTER_PROGRAM_ID = new PublicKey('9CQWTSDobkHqWzvx4nufdke4C8GKuoaqiNBBLEYFoHoG');
+// Program IDs (deployed on devnet with vanity addresses)
+const SLAB_PROGRAM_ID = new PublicKey('SLAB98WHcToiuUMMX9NQSg5E5iB8CjpK21T4h9ZXiep');
+const ROUTER_PROGRAM_ID = new PublicKey('RoutqcxkpVH8jJ2cULG9u6WbdRskQwXkJe8CqZehcyr');
 
-// Slab state size: 50 KB for MICRO-CHEAP POC
-// SUPER ULTRA cheap: ~0.35 SOL rent!
-// Supports: 5 users, 25 orders, 10 positions, 5 reservations
-const SLAB_ACCOUNT_SIZE = 50 * 1024; // 50 KB - FITS IN CURRENT BALANCE!
+// Slab state size: SlabState struct (v0 minimal ~3.4KB)
+// SlabHeader (200B) + QuoteCache (136B) + BookArea (3072B) = 3,408 bytes
+const SLAB_ACCOUNT_SIZE = 3408; // Exact size matching SlabState::LEN
 
 async function main() {
   console.log('🚀 Percolator Slab Initialization Script\n');
@@ -32,19 +31,18 @@ async function main() {
   const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
   console.log('✅ Connected to Solana devnet');
 
-  // Load or create payer keypair
+  // Load payer keypair (PERC vanity wallet)
   let payer: Keypair;
-  const KEYPAIR_PATH = 'slab-payer.json';
+  const KEYPAIR_PATH = 'perc-keypair.json';
   
   if (fs.existsSync(KEYPAIR_PATH)) {
-    console.log('📂 Loading existing keypair...');
+    console.log('📂 Loading PERC vanity wallet...');
     const keypairData = JSON.parse(fs.readFileSync(KEYPAIR_PATH, 'utf-8'));
     payer = Keypair.fromSecretKey(new Uint8Array(keypairData));
   } else {
-    console.log('🔑 Generating new keypair...');
-    payer = Keypair.generate();
-    fs.writeFileSync(KEYPAIR_PATH, JSON.stringify(Array.from(payer.secretKey)));
-    console.log(`💾 Keypair saved to ${KEYPAIR_PATH}`);
+    console.error('❌ Could not find perc-keypair.json');
+    console.log('\n💡 Make sure scripts/perc-keypair.json exists.\n');
+    process.exit(1);
   }
 
   console.log(`👛 Payer: ${payer.publicKey.toBase58()}`);
@@ -123,63 +121,66 @@ async function main() {
     programId: SLAB_PROGRAM_ID,
   });
 
-  // Build Initialize instruction
+  // Build Initialize instruction (Tolly's format)
   console.log('\n🔧 Building Initialize instruction...');
   
-  // Instruction data layout:
-  // - 1 byte: discriminator (4 = Initialize)
-  // - 32 bytes: authority pubkey
-  // - 32 bytes: oracle pubkey (can be dummy for now)
-  // - 32 bytes: router pubkey
-  // - 2 bytes: imr (initial margin ratio, basis points)
-  // - 2 bytes: mmr (maintenance margin ratio, basis points)
-  // - 8 bytes: maker_fee (can be negative for rebate)
-  // - 8 bytes: taker_fee
-  // - 8 bytes: batch_ms (batch window duration)
-  // - 2 bytes: freeze_levels
+  // Create a dummy instrument ID (market identifier)
+  const instrumentId = Keypair.generate().publicKey;
   
-  const instructionData = Buffer.alloc(1 + 32 + 32 + 32 + 2 + 2 + 8 + 8 + 8 + 2);
+  // Derive the PDA bump (even though we're using regular account for v0)
+  const [expectedPDA, bump] = PublicKey.findProgramAddressSync(
+    [Buffer.from('slab'), instrumentId.toBuffer()],
+    SLAB_PROGRAM_ID
+  );
+  
+  console.log(`   Instrument ID: ${instrumentId.toBase58()}`);
+  console.log(`   Expected PDA: ${expectedPDA.toBase58()}`);
+  console.log(`   PDA Bump: ${bump}\n`);
+  
+  // Instruction data layout (121 bytes):
+  // - 1 byte: discriminator (0 = Initialize)
+  // - 32 bytes: lp_owner
+  // - 32 bytes: router_id
+  // - 32 bytes: instrument
+  // - 8 bytes: mark_px (i64)
+  // - 8 bytes: taker_fee_bps (i64)
+  // - 8 bytes: contract_size (i64)
+  // - 1 byte: bump
+  
+  const instructionData = Buffer.alloc(1 + 32 + 32 + 32 + 8 + 8 + 8 + 1);
   let offset = 0;
   
-  // Discriminator: 4 = Initialize
-  instructionData.writeUInt8(4, offset);
+  // Discriminator: 0 = Initialize
+  instructionData.writeUInt8(0, offset);
   offset += 1;
   
-  // Authority (LP owner) - use payer
-  console.log(`   Setting authority to: ${payer.publicKey.toBase58()}`);
+  // LP Owner - use payer
+  console.log(`   LP Owner: ${payer.publicKey.toBase58()}`);
   payer.publicKey.toBuffer().copy(instructionData, offset);
   offset += 32;
   
-  // Oracle pubkey (dummy for now - use system program)
-  SystemProgram.programId.toBuffer().copy(instructionData, offset);
-  offset += 32;
-  
-  // Router pubkey
+  // Router ID
   ROUTER_PROGRAM_ID.toBuffer().copy(instructionData, offset);
   offset += 32;
   
-  // IMR: 500 basis points = 5%
-  instructionData.writeUInt16LE(500, offset);
-  offset += 2;
+  // Instrument ID
+  instrumentId.toBuffer().copy(instructionData, offset);
+  offset += 32;
   
-  // MMR: 300 basis points = 3%
-  instructionData.writeUInt16LE(300, offset);
-  offset += 2;
-  
-  // Maker fee: -2 basis points = -0.02% (rebate)
-  instructionData.writeBigInt64LE(BigInt(-2), offset);
+  // Mark price: $100 (in 1e6 scale = 100_000_000)
+  instructionData.writeBigInt64LE(BigInt(100_000_000), offset);
   offset += 8;
   
-  // Taker fee: 5 basis points = 0.05%
+  // Taker fee: 5 basis points
   instructionData.writeBigInt64LE(BigInt(5), offset);
   offset += 8;
   
-  // Batch window: 100ms
-  instructionData.writeBigUInt64LE(BigInt(100), offset);
+  // Contract size: 1.0 (in 1e6 scale = 1_000_000)
+  instructionData.writeBigInt64LE(BigInt(1_000_000), offset);
   offset += 8;
   
-  // Freeze levels: 3
-  instructionData.writeUInt16LE(3, offset);
+  // Bump seed
+  instructionData.writeUInt8(bump, offset);
   
   const initializeIx = {
     programId: SLAB_PROGRAM_ID,
@@ -204,65 +205,16 @@ async function main() {
       { commitment: 'confirmed' }
     );
 
-    console.log('\n✅ Slab initialized!');
-    console.log(`   Transaction: ${initSignature}`);
-    
-    // Now add instrument in a SEPARATE transaction
-    console.log('\n🔧 Adding ETH/USDC instrument...');
-    
-    const addInstrumentData = Buffer.alloc(1 + 40);
-    let instOffset = 0;
-    
-    // Discriminator: 5 = AddInstrument
-    addInstrumentData.writeUInt8(5, instOffset);
-    instOffset += 1;
-    
-    // Symbol (8 bytes)
-    const symbolBytes = Buffer.from('ETH/USDC'.padEnd(8, '\0').substring(0, 8), 'utf-8');
-    symbolBytes.copy(addInstrumentData, instOffset);
-    instOffset += 8;
-    
-    // Contract size: 1.0 with 6 decimals
-    addInstrumentData.writeBigUInt64LE(BigInt(1000000), instOffset);
-    instOffset += 8;
-    
-    // Tick: $0.01 with 6 decimals
-    addInstrumentData.writeBigUInt64LE(BigInt(10000), instOffset);
-    instOffset += 8;
-    
-    // Lot: 0.001 ETH with 6 decimals
-    addInstrumentData.writeBigUInt64LE(BigInt(1000), instOffset);
-    instOffset += 8;
-    
-    // Index price: $3850 with 6 decimals
-    addInstrumentData.writeBigUInt64LE(BigInt(3850000000), instOffset);
-    
-    const addInstrumentIx = {
-      programId: SLAB_PROGRAM_ID,
-      keys: [
-        { pubkey: slabAccount.publicKey, isSigner: false, isWritable: true },
-        { pubkey: payer.publicKey, isSigner: true, isWritable: false },
-      ],
-      data: addInstrumentData,
-    };
-    
-    const addInstrumentTransaction = new Transaction().add(addInstrumentIx);
-    
-    const instrumentSignature = await sendAndConfirmTransaction(
-      connection,
-      addInstrumentTransaction,
-      [payer],
-      { commitment: 'confirmed' }
-    );
-
-    console.log('\n🎉 SUCCESS! Slab initialized with ETH/USDC instrument!');
+    console.log('\n🎉 SUCCESS! Slab initialized!');
     console.log(`\n📊 Details:`);
     console.log(`   Slab Account: ${slabAccount.publicKey.toBase58()}`);
+    console.log(`   Instrument ID: ${instrumentId.toBase58()}`);
     console.log(`   Init Transaction: ${initSignature}`);
-    console.log(`   Instrument Transaction: ${instrumentSignature}`);
-    console.log(`   Instrument: ETH/USDC (index 0)`);
+    console.log(`   Mark Price: $100 (100,000,000 in 1e6 scale)`);
+    console.log(`   Contract Size: 1.0 (1,000,000 in 1e6 scale)`);
+    console.log(`   Taker Fee: 5 basis points`);
     console.log(`\n🔍 View on Explorer:`);
-    console.log(`   https://explorer.solana.com/tx/${instrumentSignature}?cluster=devnet`);
+    console.log(`   https://explorer.solana.com/tx/${initSignature}?cluster=devnet`);
     console.log(`   https://explorer.solana.com/address/${slabAccount.publicKey.toBase58()}?cluster=devnet`);
     
     // Save the Slab account address
@@ -270,11 +222,14 @@ async function main() {
       'slab-account.json',
       JSON.stringify({
         slabAccount: slabAccount.publicKey.toBase58(),
+        instrumentId: instrumentId.toBase58(),
         programId: SLAB_PROGRAM_ID.toBase58(),
+        routerId: ROUTER_PROGRAM_ID.toBase58(),
         initTransaction: initSignature,
-        instrumentTransaction: instrumentSignature,
         timestamp: new Date().toISOString(),
-        instruments: ['ETH/USDC'],
+        markPrice: 100_000_000,
+        contractSize: 1_000_000,
+        takerFeeBps: 5,
       }, null, 2)
     );
     console.log(`\n💾 Slab account info saved to slab-account.json`);
@@ -282,7 +237,7 @@ async function main() {
     console.log(`\n✅ Next steps:`);
     console.log(`   1. Update backend to use this Slab account:`);
     console.log(`      SLAB_ACCOUNT=${slabAccount.publicKey.toBase58()}`);
-    console.log(`   2. Test Reserve/Commit transactions!`);
+    console.log(`   2. Test Reserve/Commit transactions with the Router!`);
     
   } catch (error: any) {
     console.error('\n❌ Initialization failed:', error);

@@ -84,7 +84,7 @@ pub fn process_instruction(
 /// Process initialize instruction
 ///
 /// Expected accounts:
-/// 0. `[writable]` Registry account (PDA)
+/// 0. `[writable]` Registry account (PDA, must be pre-created)
 /// 1. `[signer]` Governance authority
 ///
 /// Expected data layout (32 bytes):

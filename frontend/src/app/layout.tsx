@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import "./globals.css";
 import { WalletProvider } from "@/components/WalletProvider";
+import { Toaster } from "@/components/ui/Toaster";
 
 const poppins = Poppins({
   variable: "--font-poppins",
@@ -29,6 +30,7 @@ export default function RootLayout({
       >
         <WalletProvider>
           {children}
+          <Toaster />
         </WalletProvider>
       </body>
     </html>

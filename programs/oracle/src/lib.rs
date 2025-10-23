@@ -37,3 +37,6 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 }
 
 pub use state::{PriceOracle, PRICE_ORACLE_SIZE};
+
+/// Program ID - Our generated vanity address
+pub const ID: &str = "oracpooXY8Nnpx2JTLkrLiJsDaMefERUFFRktkAZ3ki";

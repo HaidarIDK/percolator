@@ -13,21 +13,21 @@ import {
 import { getConnection } from './solana';
 import BN from 'bn.js';
 
-// Program IDs (set via environment variables)
-// Will be set when you deploy your new programs
+// Program IDs (loaded from environment variables)
+// Updated: 2025-10-23 - v0 deployment
 export const SLAB_PROGRAM_ID = process.env.SLAB_PROGRAM_ID
   ? new PublicKey(process.env.SLAB_PROGRAM_ID)
-  : null;
+  : new PublicKey('SLAB98WHcToiuUMMX9NQSg5E5iB8CjpK21T4h9ZXiep'); // Fallback to deployed program
 
 export const ROUTER_PROGRAM_ID = process.env.ROUTER_PROGRAM_ID
   ? new PublicKey(process.env.ROUTER_PROGRAM_ID)
-  : null;
+  : new PublicKey('RoutqcxkpVH8jJ2cULG9u6WbdRskQwXkJe8CqZehcyr'); // Fallback to deployed program
 
-// Slab Account (set via environment variable)
-// Will be created when you initialize your new slab
+// Slab Account (loaded from environment variable)
+// Updated: 2025-10-23 - v0 initialized slab
 export const SLAB_ACCOUNT = process.env.SLAB_ACCOUNT
   ? new PublicKey(process.env.SLAB_ACCOUNT)
-  : null;
+  : new PublicKey('5Yd2fL7f1DhmNL3u82ptZ21CUpFJHYs1Fqfg2Qs9CLDB'); // Fallback to initialized slab
 
 /**
  * Instruction discriminators

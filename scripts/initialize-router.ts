@@ -16,13 +16,13 @@ import {
 import fs from 'fs';
 import path from 'path';
 
-// Router Program ID (deployed on devnet)
-const ROUTER_PROGRAM_ID = new PublicKey('9CQWTSDobkHqWzvx4nufdke4C8GKuoaqiNBBLEYFoHoG');
+// Router Program ID (deployed on devnet with vanity address)
+const ROUTER_PROGRAM_ID = new PublicKey('RoutqcxkpVH8jJ2cULG9u6WbdRskQwXkJe8CqZehcyr');
 
 // Router instruction discriminators
-enum RouterInstruction {
-  Initialize = 0,
-}
+const RouterInstruction = {
+  Initialize: 0,
+} as const;
 
 async function main() {
   console.log('🚀 Percolator Router Initialization Script\n');
@@ -31,18 +31,17 @@ async function main() {
   const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
   console.log('✅ Connected to Solana devnet');
 
-  // Load payer keypair (same one used for Slab initialization)
-  const keypairPath = path.join(__dirname, 'slab-payer.json');
+  // Load payer keypair (PERC vanity wallet)
+  const keypairPath = 'perc-keypair.json';
   let payer: Keypair;
 
   try {
     const keypairData = JSON.parse(fs.readFileSync(keypairPath, 'utf-8'));
     payer = Keypair.fromSecretKey(new Uint8Array(keypairData));
-    console.log('📂 Loaded existing keypair from slab-payer.json');
+    console.log('📂 Loaded PERC vanity wallet from perc-keypair.json');
   } catch {
-    console.error('❌ Could not load slab-payer.json');
-    console.log('\n💡 This keypair should have been created during Slab initialization.');
-    console.log('   Check scripts/slab-payer.json exists.\n');
+    console.error('❌ Could not load perc-keypair.json');
+    console.log('\n💡 Make sure scripts/perc-keypair.json exists.\n');
     process.exit(1);
   }
 
@@ -75,9 +74,10 @@ async function main() {
 
   // Calculate rent for Registry account
   // Registry structure: SlabRegistry with 256 SlabEntry slots
-  // SlabEntry is large with multiple Pubkeys and u64 fields
-  // Let's use a safe larger size: 100KB to be sure
-  const REGISTRY_SIZE = 100 * 1024;
+  // SlabEntry size: 168 bytes (2 Pubkeys + version_hash + fields + padding)
+  // SlabRegistry header: ~160 bytes
+  // Total: 32 + 32 + 2 + 1 + 5 + 8*8 + 16*2 + 8 + (168 * 256) = 43,168 bytes
+  const REGISTRY_SIZE = 43168;
   const registryRent = await connection.getMinimumBalanceForRentExemption(REGISTRY_SIZE);
   console.log(`💵 Rent for Registry: ${(registryRent / 1e9).toFixed(8)} SOL`);
 
@@ -112,15 +112,22 @@ async function main() {
   // Build initialization transaction
   console.log('🔧 Building Router initialization...\n');
 
-  // Generate keypairs for Registry and Vault
+  // NOTE: The Router program expects a PDA, but we can't easily create PDAs from client
+  // For v0, we'll modify the program to accept a regular account
+  // OR create separate transactions
+  
+  // SIMPLIFIED APPROACH: Use the expected PDA but create it as program-owned account
+  // Generate a keypair for registry (for now, not using true PDA)
   const registryKeypair = Keypair.generate();
-  const vaultKeypair = Keypair.generate();
-
+  
   console.log(`📋 Registry Account: ${registryKeypair.publicKey.toBase58()}`);
-  console.log(`🏦 Vault Account: ${vaultKeypair.publicKey.toBase58()}\n`);
+  console.log(`   Expected PDA: ${registryPDA.toBase58()}`);
+  console.log(`   Size: ${REGISTRY_SIZE} bytes`);
+  console.log(`   Rent: ${(registryRent / 1e9).toFixed(8)} SOL\n`);
+  console.log(`⚠️  Note: Using regular account instead of PDA for v0 testing\n`);
 
-  // Create Registry account owned by Router program
-  const createRegistryIx = SystemProgram.createAccount({
+  // Create registry account
+  const createIx = SystemProgram.createAccount({
     fromPubkey: payer.publicKey,
     newAccountPubkey: registryKeypair.publicKey,
     lamports: registryRent,
@@ -128,16 +135,7 @@ async function main() {
     programId: ROUTER_PROGRAM_ID,
   });
 
-  // Create Vault account owned by Router program
-  const createVaultIx = SystemProgram.createAccount({
-    fromPubkey: payer.publicKey,
-    newAccountPubkey: vaultKeypair.publicKey,
-    lamports: vaultRent,
-    space: VAULT_SIZE,
-    programId: ROUTER_PROGRAM_ID,
-  });
-
-  // Build Initialize instruction data: [discriminator(1), authority(32)]
+  // Initialize instruction
   const data = Buffer.alloc(33);
   data.writeUInt8(RouterInstruction.Initialize, 0);
   payer.publicKey.toBuffer().copy(data, 1);
@@ -152,8 +150,7 @@ async function main() {
   });
 
   const transaction = new Transaction()
-    .add(createRegistryIx)
-    .add(createVaultIx)
+    .add(createIx)
     .add(initializeIx);
 
   console.log('📡 Sending Initialize transaction...');
@@ -162,7 +159,7 @@ async function main() {
     const signature = await sendAndConfirmTransaction(
       connection,
       transaction,
-      [payer, registryKeypair, vaultKeypair], // Payer, registry, and vault need to sign
+      [payer, registryKeypair], // Registry keypair needs to sign for account creation
       {
         commitment: 'confirmed',
         preflightCommitment: 'confirmed',
@@ -171,22 +168,20 @@ async function main() {
 
     console.log(`\n✅ Router initialized successfully!`);
     console.log(`   Signature: ${signature}`);
-    console.log(`   Registry: ${registryKeypair.publicKey.toBase58()}`);
+    console.log(`   Registry Account: ${registryKeypair.publicKey.toBase58()}`);
+    console.log(`   (Expected PDA: ${registryPDA.toBase58()})`);
     console.log(`\n🔗 View on Solscan:`);
     console.log(`   https://solscan.io/tx/${signature}?cluster=devnet`);
     console.log(`\n📊 Router Program Info:`);
     console.log(`   Program ID: ${ROUTER_PROGRAM_ID.toBase58()}`);
-    console.log(`   Registry PDA: ${registryPDA.toBase58()}`);
+    console.log(`   Registry Account: ${registryKeypair.publicKey.toBase58()}`);
     console.log(`   Authority: ${payer.publicKey.toBase58()}`);
-
-    console.log(`   Vault: ${vaultKeypair.publicKey.toBase58()}`);
 
     // Save info to file
     const routerInfo = {
       programId: ROUTER_PROGRAM_ID.toBase58(),
       registryAccount: registryKeypair.publicKey.toBase58(),
-      vaultAccount: vaultKeypair.publicKey.toBase58(),
-      registryPDA: registryPDA.toBase58(), // Original PDA (for reference)
+      registryPDA: registryPDA.toBase58(), // For reference
       registryBump,
       authority: payer.publicKey.toBase58(),
       initSignature: signature,
@@ -194,19 +189,14 @@ async function main() {
       timestamp: new Date().toISOString(),
     };
 
-    // Save keypairs for future use
+    // Save registry keypair
     fs.writeFileSync(
-      path.join(__dirname, 'router-registry-keypair.json'),
+      'router-registry-keypair.json',
       JSON.stringify(Array.from(registryKeypair.secretKey))
     );
 
     fs.writeFileSync(
-      path.join(__dirname, 'router-vault-keypair.json'),
-      JSON.stringify(Array.from(vaultKeypair.secretKey))
-    );
-
-    fs.writeFileSync(
-      path.join(__dirname, 'router-info.json'),
+      'router-info.json',
       JSON.stringify(routerInfo, null, 2)
     );
 
