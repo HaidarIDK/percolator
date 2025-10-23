@@ -30,6 +30,9 @@ pub fn process_instruction(
     let instruction = match discriminator {
         0 => SlabInstruction::Initialize,
         1 => SlabInstruction::CommitFill,
+        2 => SlabInstruction::Reserve,
+        3 => SlabInstruction::Commit,
+        4 => SlabInstruction::Cancel,
         _ => {
             msg!("Error: Unknown instruction");
             return Err(PercolatorError::InvalidInstruction.into());
