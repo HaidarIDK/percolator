@@ -144,7 +144,13 @@ export default function SimpleTradePage() {
           const signedTx = await signTransaction(transaction)
           
           const connection = new Connection(clusterApiUrl('devnet'), 'confirmed')
-          const signature = await connection.sendRawTransaction(signedTx.serialize())
+          
+          // Send transaction with maxRetries: 0 to prevent double submission
+          const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+            skipPreflight: false,
+            maxRetries: 0,
+          })
+          
           await connection.confirmTransaction(signature, 'confirmed')
           
           setLastHoldId(result.holdId)
@@ -192,7 +198,13 @@ export default function SimpleTradePage() {
           const signedTx = await signTransaction(transaction)
           
           const connection = new Connection(clusterApiUrl('devnet'), 'confirmed')
-          const signature = await connection.sendRawTransaction(signedTx.serialize())
+          
+          // Send transaction with skipPreflight to avoid "already processed" errors  
+          const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+            skipPreflight: false,
+            maxRetries: 0, // Don't retry - prevents double submission
+          })
+          
           await connection.confirmTransaction(signature, 'confirmed')
           
           // Record the successful trade
