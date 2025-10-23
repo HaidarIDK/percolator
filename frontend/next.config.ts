@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Optimize production builds
+  compress: true,
+  poweredByHeader: false,
+  reactStrictMode: true,
   async headers() {
     return [
       {

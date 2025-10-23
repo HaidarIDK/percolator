@@ -1,282 +1,170 @@
-# ✅ Deployment Checklist
+# 🚀 Deployment Checklist
 
-## 📦 What You're Deploying
+## 📋 Local Development Setup
 
-```
-┌─────────────────────────────────────────────┐
-│  BACKEND (Node.js/Express)                  │
-│  ├── Market Data API (CoinGecko)            │
-│  ├── Trading API (Reserve/Commit)           │
-│  ├── WebSocket Server                       │
-│  └── Solana Integration                     │
-└─────────────────────────────────────────────┘
-                    ↓ HTTP/WSS
-┌─────────────────────────────────────────────┐
-│  FRONTEND (Next.js)                         │
-│  ├── Dashboard UI                           │
-│  ├── TradingView Charts                     │
-│  ├── Phantom Wallet Integration             │
-│  └── Order Entry Panel                      │
-└─────────────────────────────────────────────┘
+### 1. Create `frontend/.env.local`:
+```env
+NEXT_PUBLIC_API_URL=http://localhost:3000
+NEXT_PUBLIC_WS_URL=ws://localhost:3000/ws
+NEXT_PUBLIC_SERVER_WS_URL=ws://localhost:3000/ws
+NEXT_PUBLIC_SOLANA_RPC_URL=https://api.devnet.solana.com
 ```
 
----
+### 2. Create `api/.env`:
+```env
+NODE_ENV=development
+PORT=3000
+HOST=localhost
 
-## 🎯 Pre-Deployment
+SOLANA_NETWORK=devnet
+SOLANA_RPC_URL=https://api.devnet.solana.com
 
-- [ ] Code tested locally
-- [ ] `npm run build` works in `/api`
-- [ ] `npm run build` works in `/frontend`
-- [ ] Code pushed to GitHub
-- [ ] GitHub repository is public (or Render has access)
-
----
-
-## 🔧 Backend Deployment (Render.com)
-
-### Step 1: Create Backend Service
-- [ ] Login to https://dashboard.render.com/
-- [ ] Click "New +" → "Web Service"
-- [ ] Connect GitHub repo
-- [ ] Select `percolator` repository
-
-### Step 2: Configure Backend
-```
-✅ Name: percolator-api
-✅ Root Directory: api
-✅ Environment: Node
-✅ Build Command: npm install && npm run build
-✅ Start Command: npm start
-✅ Plan: Free
+# Add these when you deploy your custom programs:
+# ROUTER_PROGRAM_ID=your_custom_router_address
+# SLAB_PROGRAM_ID=your_custom_slab_address
 ```
 
-### Step 3: Environment Variables
+### 3. Test Locally:
 ```bash
+# Terminal 1 - Start API
+cd api
+npm start
+
+# Terminal 2 - Start Frontend
+cd frontend
+npm run dev
+```
+
+Visit: http://localhost:3001
+
+---
+
+## ☁️ Render.com Production Setup
+
+### Backend (percolator-api)
+
+**Environment Variables:**
+```
 NODE_ENV=production
 PORT=3000
 HOST=0.0.0.0
 SOLANA_NETWORK=devnet
 SOLANA_RPC_URL=https://api.devnet.solana.com
-SLAB_PROGRAM_ID=6EF2acRfPejnxXYd9apKc2wb3p2NLG8rKgWbCfp5G7Uz
-ROUTER_PROGRAM_ID=9CQWTSDobkHqWzvx4nufdke4C8GKuoaqiNBBLEYFoHoG
+
+# Add these later when you deploy your custom Solana programs:
+# ROUTER_PROGRAM_ID=your_custom_router_address
+# SLAB_PROGRAM_ID=your_custom_slab_address
 ```
 
-### Step 4: Deploy & Test
-- [ ] Click "Create Web Service"
-- [ ] Wait for build (~5 min)
-- [ ] Copy your backend URL: `https://______________.onrender.com`
-- [ ] Test health endpoint:
-  ```bash
-  curl https://YOUR-BACKEND-URL.onrender.com/api/health
-  ```
-- [ ] Should return: `{"status":"healthy",...}`
+**Build Command:**
+```
+npm install && npm run build
+```
 
-**✅ Backend URL:** `https://________________________________.onrender.com`
+**Start Command:**
+```
+npm start
+```
 
 ---
 
-## 🎨 Frontend Deployment (Render.com)
+### Frontend (percolator-frontend)
 
-### Step 1: Create Frontend Service
-- [ ] Click "New +" → "Web Service" (again)
-- [ ] Select same `percolator` repo
-
-### Step 2: Configure Frontend
+**Environment Variables:**
 ```
-✅ Name: percolator-frontend
-✅ Root Directory: frontend
-✅ Environment: Node
-✅ Build Command: npm install && npm run build
-✅ Start Command: npm start
-✅ Plan: Free
+NEXT_PUBLIC_API_URL=https://api.percolator.site
+NEXT_PUBLIC_WS_URL=wss://api.percolator.site/ws
+NEXT_PUBLIC_SERVER_WS_URL=wss://api.percolator.site/ws
+NEXT_PUBLIC_SOLANA_RPC_URL=https://api.devnet.solana.com
 ```
 
-### Step 3: Environment Variables
-```bash
-NODE_ENV=production
-PORT=3000
-NEXT_PUBLIC_API_URL=https://YOUR-BACKEND-URL.onrender.com
-NEXT_PUBLIC_WS_URL=wss://YOUR-BACKEND-URL.onrender.com/ws
+**Build Command:**
+```
+npm install && npm run build
 ```
 
-**⚠️ REPLACE** `YOUR-BACKEND-URL` with the URL from Backend Step 4!
+**Start Command:**
+```
+npm start
+```
 
-### Step 4: Deploy & Test
-- [ ] Click "Create Web Service"
-- [ ] Wait for build (~5 min)
-- [ ] Copy your frontend URL: `https://______________.onrender.com`
-- [ ] Visit: `https://YOUR-FRONTEND-URL.onrender.com/dashboard`
-- [ ] Dashboard should load with live prices ✅
-
-**✅ Frontend URL:** `https://________________________________.onrender.com`
+**⚠️ Important:** Make sure PORT is set by Render (usually 10000) - don't manually set it.
 
 ---
 
-## 🧪 Testing Your Live Site
+## 🔄 Deployment Steps
 
-Visit your frontend dashboard and check:
+1. ✅ **Commit & Push to GitHub:**
+   ```bash
+   git add .
+   git commit -m "Clean up environment configuration"
+   git push origin master
+   ```
 
-### Visual Tests
-- [ ] Dashboard loads (no 404 errors)
-- [ ] Header shows "PERColator" logo
-- [ ] Three coin tabs visible (BTC/ETH/SOL)
-- [ ] TradingView chart displays
-- [ ] Orderbook shows bid/ask levels
-- [ ] Wallet button visible (top right)
+2. ✅ **Update Backend on Render:**
+   - Go to https://dashboard.render.com
+   - Select `percolator-api` service
+   - Go to "Environment" tab
+   - Update environment variables (remove any NEXT_PUBLIC_ vars)
+   - Click "Manual Deploy" → "Deploy latest commit"
 
-### Functional Tests
-- [ ] Click ETH tab → Price updates
-- [ ] Click BTC tab → Price updates
-- [ ] Click SOL tab → Price updates
-- [ ] Connect Phantom wallet → Success
-- [ ] Enter price + quantity → Inputs work
-- [ ] Click "Reserve" → Phantom opens
-- [ ] Sign transaction → Gets error 0x2 (expected!)
+3. ✅ **Update Frontend on Render:**
+   - Select `percolator-frontend` service
+   - Go to "Environment" tab
+   - Update environment variables as listed above
+   - Go to "Settings" tab
+   - Verify Build Command: `npm install && npm run build`
+   - Verify Start Command: `npm start`
+   - Click "Manual Deploy" → "Deploy latest commit"
 
-**✅ All tests passing means deployment successful!**
+4. ✅ **Wait for Deployment:**
+   - Backend should deploy first (faster)
+   - Frontend will take 3-5 minutes to build
+   - Watch the logs for any errors
 
----
-
-## 🔗 Your Live URLs
-
-After deployment, save these:
-
-```yaml
-Production URLs:
-  Backend API: https://_________________________.onrender.com
-  Frontend:    https://_________________________.onrender.com
-  
-API Endpoints:
-  Health:      https://YOUR-API.onrender.com/api/health
-  Markets:     https://YOUR-API.onrender.com/api/market/list
-  Orderbook:   https://YOUR-API.onrender.com/api/market/ETH-PERP/orderbook
-  
-Dashboard Pages:
-  Main:        https://YOUR-FRONTEND.onrender.com
-  Dashboard:   https://YOUR-FRONTEND.onrender.com/dashboard
-  Info:        https://YOUR-FRONTEND.onrender.com/info
-```
+5. ✅ **Test Live Site:**
+   - Visit https://dex.percolator.site/dashboard
+   - Check browser console (F12) for errors
+   - Verify WebSocket connection shows `wss://api.percolator.site/ws`
+   - Verify data is loading
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Build Failed?
-```bash
-# Test locally first:
-cd api && npm install && npm run build
-cd ../frontend && npm install && npm run build
+### Frontend Deployment Fails with "Port scan timeout"
+- Make sure Start Command is: `npm start`
+- Render automatically sets PORT env variable
+- The updated package.json will use it automatically
 
-# If local build works, check Render logs for specific error
-```
+### WebSocket not connecting on live site
+- Check browser console for connection URL
+- Should be `wss://api.percolator.site/ws`
+- If it's `ws://localhost:3000/ws`, env vars aren't set correctly
 
-### CORS Error?
-- Backend already configured for `*.onrender.com`
-- If using custom domain, add to `allowedOrigins` in `api/src/index.ts`
-- Redeploy after changes
+### API returns 503 errors
+- Backend might be sleeping (free tier)
+- First request wakes it up (takes 30-60 seconds)
+- Subsequent requests should work
 
-### Can't Connect to API?
-- Check `NEXT_PUBLIC_API_URL` in frontend env vars
-- Make sure it's `https://` not `http://`
-- Verify backend is running (green in Render dashboard)
-
-### WebSocket Not Working?
-- Check `NEXT_PUBLIC_WS_URL` uses `wss://` (not `ws://`)
-- Format: `wss://your-backend.onrender.com/ws`
-
-### Service Sleeps?
-- Free tier sleeps after 15 min
-- Wakes in ~30 seconds on first request
-- Upgrade to Starter ($7/mo) to keep awake
+### Local development not working
+- Make sure you created `.env.local` in frontend folder
+- Make sure you created `.env` in api folder
+- Both services must be running simultaneously
 
 ---
 
-## 📝 Post-Deployment
+## ✅ Success Checklist
 
-After successful deployment:
-
-1. **Share Your DEX!**
-   ```
-   🚀 Live Solana DEX: https://your-frontend-url.onrender.com/dashboard
-   
-   Features:
-   ✅ Live crypto prices (BTC/ETH/SOL)
-   ✅ TradingView charts
-   ✅ Phantom wallet integration
-   ✅ Beautiful modern UI
-   ```
-
-2. **Monitor Uptime**
-   - Use UptimeRobot (free)
-   - Get alerts if site goes down
-
-3. **Check Logs**
-   - Render Dashboard → Logs
-   - Monitor for errors
-
-4. **Next Steps:**
-   - Add custom domain
-   - Initialize programs (75 SOL needed)
-   - Add analytics (Google Analytics)
-   - Share on Twitter/Discord
+- [ ] Local development works (localhost:3001)
+- [ ] Backend deployed successfully on Render
+- [ ] Frontend deployed successfully on Render
+- [ ] Live site loads (https://dex.percolator.site)
+- [ ] WebSocket connects on live site
+- [ ] Market data displays correctly
+- [ ] Charts render properly
+- [ ] No CSP errors in console
 
 ---
 
-## 💰 Costs
-
-**Current Setup: $0/month** 🎉
-
-Free tier includes:
-- 750 hours/month per service (enough for hobby projects)
-- Automatic SSL/HTTPS
-- Auto-deploy from GitHub
-- Logs and monitoring
-
-**Optional Upgrades:**
-- Starter Plan: $7/month per service (no sleep, more resources)
-- Custom domain: Free with Render (just buy the domain)
-
----
-
-## ✅ Final Checklist
-
-- [ ] Backend deployed ✅
-- [ ] Frontend deployed ✅
-- [ ] Health check working ✅
-- [ ] Dashboard loads ✅
-- [ ] Prices updating ✅
-- [ ] Wallet connects ✅
-- [ ] All tests pass ✅
-- [ ] URLs documented ✅
-
-**🎉 CONGRATULATIONS! Your DEX is LIVE! 🎉**
-
----
-
-## 📞 Support
-
-**Documentation:**
-- Quick Start: `DEPLOY_QUICK_START.md`
-- Full Guide: `DEPLOY_TO_PRODUCTION.md`
-- API Ref: `QUICK_API_REFERENCE.md`
-
-**Render Docs:**
-- https://render.com/docs
-
-**Need Help?**
-- Check Render logs
-- Review build output
-- Test API endpoints with `curl`
-
----
-
-**Your Production URLs:**
-
-```
-🌐 Frontend: https://______________________________.onrender.com
-🔧 Backend:  https://______________________________.onrender.com
-📊 Status:   https://status.render.com
-```
-
-**Fill in your actual URLs above and save this file!**
-
+**Last Updated:** October 23, 2025

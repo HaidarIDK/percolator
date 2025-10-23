@@ -144,6 +144,9 @@ function mapSymbolToHyperliquidCoin(symbol: string): string {
  * Map timeframe to Hyperliquid interval format
  */
 function mapTimeframeToHyperliquidInterval(timeframe: string): string {
+  // Remove any trailing 'm', 'h', 'd' characters
+  const numericTimeframe = timeframe.replace(/[mhd]$/i, '');
+  
   const intervalMap: { [key: string]: string } = {
     '1': '1m',
     '5': '5m',
@@ -154,7 +157,7 @@ function mapTimeframeToHyperliquidInterval(timeframe: string): string {
     '1440': '1d'
   };
   
-  return intervalMap[timeframe] || '15m'; // Default to 15m
+  return intervalMap[numericTimeframe] || '15m'; // Default to 15m
 }
 
 /**

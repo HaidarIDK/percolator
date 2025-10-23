@@ -365,8 +365,8 @@ class PercolatorAPIClient {
       limit: limit.toString()
     });
     
-    // Default start date for historical data: 2025-10-01
-    const defaultFromMs = new Date('2025-10-01T00:00:00Z').getTime();
+    // Default start date for historical data: 90 days ago
+    const defaultFromMs = Date.now() - (90 * 24 * 60 * 60 * 1000);
     const effectiveFrom = from === undefined ? defaultFromMs : from;
     params.append('from', effectiveFrom.toString());
     

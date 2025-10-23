@@ -189,9 +189,10 @@ function LightweightChart({ coinId, timeframe }: { coinId: "ethereum" | "bitcoin
           };
           const apiTimeframe = apiTimeframeMap[timeframe] || "15";
           
-          // Load full history beginning from Oct 1, 2025 UTC to now
+          // Load full history for the last 90 days
           const now = Date.now();
-          const startTime = new Date('2025-10-01T00:00:00Z').getTime();
+          const daysAgo = 90;
+          const startTime = now - (daysAgo * 24 * 60 * 60 * 1000);
           
           console.log(`📊 Loading full history for ${symbol} ${apiTimeframe}`);
           console.log(`🗓️ Range: ${new Date(startTime).toISOString()} → ${new Date(now).toISOString()}`);
@@ -228,7 +229,8 @@ function LightweightChart({ coinId, timeframe }: { coinId: "ethereum" | "bitcoin
 
       loadInitialData();
   
-      const ws = new WebSocket("ws://localhost:3000/ws");
+      const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3000/ws';
+      const ws = new WebSocket(WS_URL);
       wsRef.current = ws; 
       
       const subscribeToTimeframe = (currentTimeframe: string) => {
@@ -614,7 +616,8 @@ const TradingViewChartComponent = ({
       try {
         setLoading(true)
         const now = Date.now();
-        const startTime = new Date('2025-10-01T00:00:00Z').getTime();
+        const daysAgo = 90;
+        const startTime = now - (daysAgo * 24 * 60 * 60 * 1000);
         const response = await apiClient.getChartData(symbol, apiTimeframe, 10000, startTime, now)
         
         // Handle API response format - convert object to array
@@ -1196,7 +1199,8 @@ const CrossSlabTrader = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin
         const basePrice = getMarketPrice();
         
         // Use SDK to fetch available slabs with coin-specific pricing
-        const response = await fetch(`http://localhost:3000/api/router/slabs?coin=${selectedCoin}`);
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+        const response = await fetch(`${API_URL}/api/router/slabs?coin=${selectedCoin}`);
         const data = await response.json();
         
         // Update slabs with correct prices for the selected coin
@@ -1338,7 +1342,8 @@ const CrossSlabTrader = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin
       
       // ARCHITECTURE STEP 1-2: Frontend → Client SDK
       // Call backend SDK endpoint which will build the router instruction
-      const sdkResponse = await fetch('http://localhost:3000/api/router/execute-cross-slab', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+      const sdkResponse = await fetch(`${API_URL}/api/router/execute-cross-slab`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2189,7 +2194,8 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
         const symbol = getSymbol();
         if (!symbol) return; // Safety check
         
-        const response = await fetch(`http://localhost:3000/api/market/${symbol}/orderbook`);
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+        const response = await fetch(`${API_URL}/api/market/${symbol}/orderbook`);
         const data = await response.json();
         if (data.midPrice) {
           setRealPrice(data.midPrice);
@@ -2289,7 +2295,8 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
     const fetchPortfolio = async () => {
       try {
         const walletAddress = publicKey.toBase58();
-        const data = await fetch(`http://localhost:3000/api/user/${walletAddress}/portfolio`);
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+        const data = await fetch(`${API_URL}/api/user/${walletAddress}/portfolio`);
         const portfolioData = await data.json();
         setPortfolio(portfolioData);
       } catch (error) {
@@ -2344,7 +2351,8 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
       if (side === "Reserve") {
         // RESERVE FLOW
         console.log(`🔒 Step 1: Building Reserve transaction...`);
-        const reserveResponse = await fetch(`http://localhost:3000${reserveEndpoint}`, {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+        const reserveResponse = await fetch(`${API_URL}${reserveEndpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(reserveBody)
@@ -2435,7 +2443,8 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
         }
 
         console.log(`✅ Step 2: Building Commit transaction with Hold ID: ${lastHoldId}...`);
-        const commitResponse = await fetch(`http://localhost:3000/api/trade/commit`, {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+        const commitResponse = await fetch(`${API_URL}/api/trade/commit`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -3063,7 +3072,8 @@ const StatusFooter = () => {
   useEffect(() => {
     const checkWsStatus = () => {
       // Simulate WebSocket status check
-      const ws = new WebSocket('ws://localhost:3000/ws');
+      const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3000/ws';
+      const ws = new WebSocket(WS_URL);
       
       ws.onopen = () => {
         setWsStatus('connected');
@@ -3243,7 +3253,8 @@ export default function TradingDashboard() {
     if (!publicKey) return;
     setFaucetLoading(true);
     try {
-      const response = await fetch('http://localhost:3000/api/faucet/airdrop', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+      const response = await fetch(`${API_URL}/api/faucet/airdrop`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
