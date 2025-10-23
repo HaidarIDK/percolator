@@ -1,0 +1,24 @@
+# CRITICAL SECURITY: Never commit private keys!
+# All keypair files in this directory are ignored
+
+# Keypair files
+*-keypair.json
+*-wallet.json
+*-program.json
+*.key
+*.pem
+id.json
+
+# Generated addresses
+perc-*.json
+slab-*.json
+rout-*.json
+amm-*.json
+oral-*.json
+
+# Old deployment files
+router_deploy.json
+slab_deploy.json
+slab-account.json
+slab-payer.json
+

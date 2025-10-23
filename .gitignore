@@ -44,3 +44,22 @@ BEFORE_AND_AFTER.md
 test-ledger/
 .anchor/
 
+# CRITICAL: Private keypair files - NEVER commit these!
+*-keypair.json
+scripts/*-keypair.json
+scripts/*-wallet.json
+scripts/*-program.json
+scripts/perc-*.json
+scripts/slab-*.json
+scripts/rout-*.json
+scripts/amm-*.json
+scripts/oral-*.json
+*.key
+*.pem
+id.json
+
+# Guide files (internal use only)
+VANITY_ADDRESS_GUIDE.md
+UPDATE_ENV_WITH_ADDRESSES.md
+deploy-custom-programs.ps1
+
