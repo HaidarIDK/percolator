@@ -167,14 +167,15 @@ tradingRouter.post('/reserve', async (req, res) => {
       limitPrice: price,
       ttlMs: 60000, // 60 seconds TTL
       commitmentHash,
-      routeId: Date.now(), // Use timestamp as route ID
+      routeId: Date.now(), // Use timestamp as route ID (will be made unique in buildReserveInstruction)
     });
 
     // Create transaction
     const transaction = new Transaction();
     transaction.add(reserveIx);
 
-    // Get recent blockhash
+    // IMPORTANT: Get FRESH blockhash for EACH transaction to ensure uniqueness
+    // This prevents "already processed" errors when doing multiple trades
     const blockhash = await getRecentBlockhash();
     transaction.recentBlockhash = blockhash;
     transaction.feePayer = userPubkey;
@@ -299,7 +300,7 @@ tradingRouter.post('/commit', async (req, res) => {
     const transaction = new Transaction();
     transaction.add(commitIx);
 
-    // Get recent blockhash
+    // IMPORTANT: Get FRESH blockhash for EACH transaction to ensure uniqueness
     const blockhash = await getRecentBlockhash();
     transaction.recentBlockhash = blockhash;
     transaction.feePayer = userPubkey;

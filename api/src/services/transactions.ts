@@ -132,8 +132,9 @@ export function buildReserveInstruction(params: {
   commitmentHash.copy(data, offset);
   offset += 32;
 
-  // Route ID
-  const routeIdBN = new BN(routeId);
+  // Route ID (use timestamp + random to ensure uniqueness)
+  const uniqueRouteId = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+  const routeIdBN = new BN(uniqueRouteId);
   routeIdBN.toArrayLike(Buffer, 'le', 8).copy(data, offset);
 
   // Build accounts array
