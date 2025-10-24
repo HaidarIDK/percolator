@@ -51,7 +51,7 @@ import axios from "axios"
 function LightweightChart({ coinId, timeframe, onPriceUpdate }: { coinId: "ethereum" | "bitcoin" | "solana", timeframe: "15" | "60" | "240" | "D", onPriceUpdate?: (price: number) => void }) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const seriesRef = useRef<ISeriesApi<any> | null>(null);
+  const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPrice, setCurrentPrice] = useState<number>(0);
@@ -200,7 +200,7 @@ function LightweightChart({ coinId, timeframe, onPriceUpdate }: { coinId: "ether
           const data = await apiClient.getChartData(symbol, apiTimeframe, 10000, startTime, now);
           
           if (data && data.length > 0) {
-            const chartData: CandlestickData<Time>[] = data.map((candle: any) => ({
+            const chartData: CandlestickData<Time>[] = data.map((candle: { time: number; open: number; high: number; low: number; close: number }) => ({
               time: candle.time as Time,
               open: candle.open,
               high: candle.high,
@@ -533,7 +533,7 @@ const TradingViewChartComponent = ({
 
   // Function to generate coin-specific mock data
   const generateCoinSpecificMockData = (basePrice: number, count: number) => {
-    const data: any[] = [];
+    const data: Array<{ time: number; open: number; high: number; low: number; close: number }> = [];
     let price = basePrice;
     const baseTime = new Date('2024-01-01').getTime();
 
@@ -570,10 +570,11 @@ const TradingViewChartComponent = ({
     const basePrice = getBasePrice(selectedCoin);
     
     // Try to connect to real WebSocket
-    const cleanup = apiClient.connectWebSocket((data: any) => {
-      if (data.type === 'price_update' && data.symbol === symbol) {
-        const newPrice = data.price;
-        const change = data.change || 0;
+    const cleanup = apiClient.connectWebSocket((data: unknown) => {
+      const typedData = data as { type?: string; symbol?: string; price?: number; change?: number };
+      if (typedData.type === 'price_update' && typedData.symbol === symbol) {
+        const newPrice = typedData.price;
+        const change = typedData.change || 0;
         
         // Update OHLC data with new price
         setOhlcData(prev => ({
@@ -642,10 +643,10 @@ const TradingViewChartComponent = ({
         
         // Update OHLC display
         if (data.length > 0) {
-          const latest = data[data.length - 1] as any
-          const first = data[0] as any
-          const high = Math.max(...data.map((d: any) => d.high))
-          const low = Math.min(...data.map((d: any) => d.low))
+          const latest = data[data.length - 1] as { open: number; high: number; low: number; close: number }
+          const first = data[0] as { open: number; high: number; low: number; close: number }
+          const high = Math.max(...data.map((d) => d.high))
+          const low = Math.min(...data.map((d) => d.low))
           const change = latest.close - first.open
           
           setOhlcData({
@@ -705,9 +706,10 @@ const TradingViewChartComponent = ({
         apiClient.subscribeToServerCandle('SOL', interval);
         
         // Listen for candle updates
-        const cleanup = apiClient.onServerMessage((message: any) => {
-          if (message.type === 'candle' && message.symbol === 'SOL') {
-            const candleData = message.data;
+        const cleanup = apiClient.onServerMessage((message: unknown) => {
+          const typedMessage = message as { type?: string; symbol?: string; data?: unknown };
+          if (typedMessage.type === 'candle' && typedMessage.symbol === 'SOL') {
+            const candleData = typedMessage.data;
             
             // Convert to our chart data format
             const chartCandle = {
@@ -889,9 +891,9 @@ const OrderBook = ({ symbol, walletAddress }: { symbol: string; walletAddress?: 
   const [orderbook, setOrderbook] = useState<Orderbook | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'orderbook' | 'trades'>('orderbook')
-  const [recentTrades, setRecentTrades] = useState<any[]>([])
-  const [transactions, setTransactions] = useState<any[]>([]) // All transactions (unfiltered)
-  const [walletTransactions, setWalletTransactions] = useState<any[]>([]) // Wallet-filtered transactions
+  const [recentTrades, setRecentTrades] = useState<Array<{ price: number; quantity: number; timestamp: number; side: string }>>([])
+  const [transactions, setTransactions] = useState<Array<{ signature: string; blockTime?: number; err?: unknown; signer?: string; solscanLink?: string }>>([]) // All transactions (unfiltered)
+  const [walletTransactions, setWalletTransactions] = useState<Array<{ signature: string; blockTime?: number; err?: unknown; signer?: string; solscanLink?: string }>>([]) // Wallet-filtered transactions
   const [wsConnected, setWsConnected] = useState(false)
 
   useEffect(() => {
@@ -938,7 +940,7 @@ const OrderBook = ({ symbol, walletAddress }: { symbol: string; walletAddress?: 
           
           // Filter transactions by wallet address for "Last trades" tab
           if (walletAddress) {
-            const filteredTxs = data.transactions.filter((tx: any) => 
+            const filteredTxs = data.transactions.filter((tx: { signer?: string }) => 
               tx.signer && tx.signer === walletAddress
             )
             setWalletTransactions(filteredTxs)
@@ -1347,7 +1349,7 @@ const CrossSlabTrader = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin
   const [submitting, setSubmitting] = useState(false);
   const [slabQuotes, setSlabQuotes] = useState<any[]>([]);
   const [selectedSlabs, setSelectedSlabs] = useState<number[]>([]);
-  const [executionPlan, setExecutionPlan] = useState<any>(null);
+  const [executionPlan, setExecutionPlan] = useState<{ slabs: Array<{ slabId: string; fillAmount: number; price: number; slabName?: string; quantity?: number; cost?: number }>; totalCost: number; totalFees: number; estimatedSlippage: number; totalQuantity?: number; avgPrice?: number; unfilled?: number } | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(true); // Show details by default
   const [showCrossSlabInfo, setShowCrossSlabInfo] = useState(false);
   const [deploymentVersion, setDeploymentVersion] = useState<"v0" | "v1">("v0");
@@ -1379,9 +1381,9 @@ const CrossSlabTrader = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin
         const data = await response.json();
         
         // Update slabs with correct prices for the selected coin
-        const updatedSlabs = (data.slabs || []).map((slab: any) => ({
+        const updatedSlabs = (data.slabs || []).map((slab: { id: string; name: string; buyPrice: number; sellPrice: number }) => ({
           ...slab,
-          vwap: basePrice * (1 + (slab.id === 1 ? 0.00005 : slab.id === 2 ? 0.00008 : -0.00005)), // Small price variations
+          vwap: basePrice * (1 + (slab.id === '1' ? 0.00005 : slab.id === '2' ? 0.00008 : -0.00005)), // Small price variations
         }));
         
         setAvailableSlabs(updatedSlabs);
@@ -1444,7 +1446,7 @@ const CrossSlabTrader = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin
 
     // Select best slabs within price limit
     let remaining = qty;
-    const plan: any[] = [];
+    const plan: Array<{ slabId: string; fillAmount: number; price: number }> = [];
     let totalCost = 0;
     let totalFees = 0;
 
@@ -1523,9 +1525,9 @@ const CrossSlabTrader = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           wallet: publicKey.toBase58(),
-          slabs: executionPlan.slabs.map((s: any) => ({
+          slabs: executionPlan.slabs.map((s: { slabId: string; fillAmount: number; price: number }) => ({
             slabId: s.slabId,
-            quantity: s.quantity,
+            quantity: s.fillAmount,
             price: s.price,
           })),
           side: tradeSide,
@@ -1578,7 +1580,7 @@ const CrossSlabTrader = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin
       setLimitPrice("");
       setExecutionPlan(null);
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ Cross-slab execution error:', error);
       
       // Handle specific errors
@@ -2007,13 +2009,13 @@ Margin calculation on NET exposure:
             <div className="px-6 py-4 bg-[#181825]/30 border-t border-[#181825] flex justify-between items-center">
               <div className="text-xs text-gray-400">
                 <Zap className="w-3 h-3 inline mr-1 text-purple-400" />
-                Powered by Solana's atomic CPI
+                Powered by Solana&apos;s atomic CPI
               </div>
               <button
                 onClick={() => setShowCrossSlabInfo(false)}
                 className="px-6 py-2 rounded-lg font-semibold text-sm bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-purple-500/50 text-purple-200 hover:from-purple-500/40 hover:to-pink-500/40 transition-all"
               >
-                Got it! Let's trade 🚀
+                Got it! Let&apos;s trade 🚀
               </button>
             </div>
           </motion.div>
@@ -2193,11 +2195,11 @@ Margin calculation on NET exposure:
 
             {/* Slab breakdown */}
             <div className="space-y-2">
-              {executionPlan.slabs.map((slab: any, idx: number) => (
+              {executionPlan.slabs.map((slab: { slabId: string; fillAmount: number; price: number; slabName?: string }, idx: number) => (
                 <div key={idx} className="bg-black/30 rounded-lg p-2 text-xs">
                   <div className="flex justify-between mb-1">
                     <span className="text-gray-300">{slab.slabName}</span>
-                    <span className="text-white font-semibold">{slab.quantity} {getBaseCurrency()}</span>
+                    <span className="text-white font-semibold">{slab.fillAmount} {getBaseCurrency()}</span>
                   </div>
                   <div className="flex justify-between text-gray-500">
                     <span>@ ${slab.price.toFixed(2)}</span>
@@ -2310,7 +2312,7 @@ const OrderForm = ({ selectedCoin, chartCurrentPrice }: { selectedCoin: "ethereu
   const [quantity, setQuantity] = useState("")
   const [capLimit, setCapLimit] = useState("100")
   const [multiAsset, setMultiAsset] = useState(false)
-  const [portfolio, setPortfolio] = useState<any>(null)
+  const [portfolio, setPortfolio] = useState<{ solBalance: number } | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [lastHoldId, setLastHoldId] = useState<number | null>(null)
   const [mounted, setMounted] = useState(false)
@@ -2562,7 +2564,7 @@ const OrderForm = ({ selectedCoin, chartCurrentPrice }: { selectedCoin: "ethereu
             setSubmitting(false);
             return;
             
-          } catch (txError: any) {
+          } catch (txError: unknown) {
             // Silent error handling for clean console
             
             // Graceful fallback - still works for demo!
@@ -2659,7 +2661,7 @@ const OrderForm = ({ selectedCoin, chartCurrentPrice }: { selectedCoin: "ethereu
             setSubmitting(false);
             return;
             
-          } catch (txError: any) {
+          } catch (txError: unknown) {
             // Silent error handling for clean console
             
             // Graceful success even if blockchain simulation fails
@@ -2699,7 +2701,7 @@ const OrderForm = ({ selectedCoin, chartCurrentPrice }: { selectedCoin: "ethereu
         setSubmitting(false);
         return;
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Silent - errors already handled in try blocks
       setSubmitting(false);
     }
@@ -3511,7 +3513,7 @@ export default function TradingDashboard() {
           );
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Faucet error:', error);
       showToast(
         `Cannot connect to faucet\n\n` +

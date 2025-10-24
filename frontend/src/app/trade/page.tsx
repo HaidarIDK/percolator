@@ -359,7 +359,7 @@ export default function SimpleTradePage() {
                   <span>Total (USDC)</span>
                 </div>
                 <div className="space-y-0.5">
-                  {orderbook?.asks?.slice(0, 10).reverse().map((ask: any, i: number) => (
+                  {orderbook?.asks?.slice(0, 10).reverse().map((ask: { price: number; quantity: number }, i: number) => (
                     <div 
                       key={i} 
                       className="flex items-center justify-between text-sm px-3 py-1.5 hover:bg-red-500/10 rounded transition-colors group cursor-pointer"
@@ -390,7 +390,7 @@ export default function SimpleTradePage() {
               {/* Bids (Buy Orders) */}
               <div>
                 <div className="space-y-0.5">
-                  {orderbook?.bids?.slice(0, 10).map((bid: any, i: number) => (
+                  {orderbook?.bids?.slice(0, 10).map((bid: { price: number; quantity: number }, i: number) => (
                     <div 
                       key={i} 
                       className="flex items-center justify-between text-sm px-3 py-1.5 hover:bg-green-500/10 rounded transition-colors group cursor-pointer"

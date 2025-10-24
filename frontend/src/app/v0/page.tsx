@@ -35,7 +35,7 @@ export default function V0Page() {
           <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-xl p-6">
             <h2 className="text-2xl font-bold mb-4 text-yellow-400">⚠️ POC Limitations</h2>
             <ul className="space-y-2 text-zinc-300">
-              <li>⚠️ <strong>Mock Execution</strong> - Transactions succeed but don't modify slab state</li>
+              <li>⚠️ <strong>Mock Execution</strong> - Transactions succeed but don&apos;t modify slab state</li>
               <li>⚠️ <strong>No Real Matching</strong> - Orders don&apos;t actually fill against each other</li>
               <li>⚠️ <strong>No Position Tracking</strong> - Balances not updated on-chain</li>
               <li>⚠️ <strong>No Settlement</strong> - No actual token transfers</li>

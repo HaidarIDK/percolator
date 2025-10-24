@@ -6,7 +6,7 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui"
 import { Particles } from "@/components/ui/particles"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
-import { ArrowLeft, ExternalLink, Wallet as WalletIcon, Activity, DollarSign } from "lucide-react"
+import { ArrowLeft, ExternalLink, Wallet as WalletIcon, Activity, DollarSign, TrendingUp } from "lucide-react"
 
 interface Transaction {
   signature: string

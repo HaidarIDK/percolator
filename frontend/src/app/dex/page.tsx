@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { Particles } from "@/components/ui/particles"
 import { AuroraText } from "@/components/ui/aurora-text"
 import { motion } from "motion/react"
@@ -97,12 +98,12 @@ export default function ComingSoonPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 1.0 }}
           >
-            <a
+            <Link
               href="/"
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#B8B8FF]/10 border border-[#B8B8FF]/30 text-white hover:bg-[#B8B8FF]/20 hover:border-[#B8B8FF]/50 transition-all duration-300 backdrop-blur-sm"
             >
               &larr; Back to Home
-            </a>
+            </Link>
           </motion.div>
 
           {/* Status Message */}
