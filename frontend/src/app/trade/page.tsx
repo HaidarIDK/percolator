@@ -270,6 +270,34 @@ export default function SimpleTradePage() {
         ease={50}
       />
       
+      {/* Testnet Notice Banner */}
+      <div className="relative z-10 bg-gradient-to-r from-yellow-900/30 to-orange-900/30 border-b border-yellow-700/50">
+        <div className="max-w-[1600px] mx-auto px-6 py-3">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-center gap-3 text-sm flex-wrap">
+              <span className="text-yellow-400 font-bold">⚠️ DEVNET TESTNET ONLY</span>
+              <span className="text-zinc-300">•</span>
+              <span className="text-zinc-300">
+                Make sure you're using <strong className="text-yellow-300">Devnet SOL</strong> (not real SOL!)
+              </span>
+              <span className="text-zinc-300">•</span>
+              <a 
+                href="https://faucet.solana.com" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 underline font-semibold"
+              >
+                Get Free Testnet SOL →
+              </a>
+            </div>
+            <div className="flex items-center justify-center gap-2 text-xs text-zinc-400">
+              <span>📱 Phantom Setup:</span>
+              <span className="text-zinc-500">Settings → Developer Settings → Enable Testnet Mode → Select "Solana Devnet"</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="relative z-10 border-b border-zinc-800 bg-black/50 backdrop-blur-md">
         <div className="max-w-[1600px] mx-auto px-6 py-4">
@@ -469,9 +497,9 @@ export default function SimpleTradePage() {
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           {tx.err ? (
-                            <span className="text-red-400 text-xs font-semibold">❌ FAILED</span>
+                            <span className="text-red-400 text-xs font-semibold">UNSUCCESSFUL</span>
                           ) : (
-                            <span className="text-green-400 text-xs font-semibold">✅ SUCCESS</span>
+                            <span className="text-green-400 text-xs font-semibold">SUCCESS</span>
                           )}
                           <span className="text-zinc-500 text-xs">
                             Slot {tx.slot?.toLocaleString()}

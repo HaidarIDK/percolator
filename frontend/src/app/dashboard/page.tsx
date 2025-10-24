@@ -883,23 +883,61 @@ const OrderBook = ({ symbol }: { symbol: string }) => {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'orderbook' | 'trades'>('orderbook')
   const [recentTrades, setRecentTrades] = useState<any[]>([])
+  const [transactions, setTransactions] = useState<any[]>([])
   const [wsConnected, setWsConnected] = useState(false)
 
   useEffect(() => {
     const fetchOrderbook = async () => {
       try {
-        const data = await apiClient.getOrderbook(symbol)
-        setOrderbook(data)
-        setLoading(false)
+        // Fetch REAL Slab orderbook data (not mock market data)
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
+        const response = await fetch(`${API_URL}/api/slab-live/orderbook`)
+        const data = await response.json()
+        
+        if (data.success) {
+          // Convert Slab orderbook format to expected format
+          setOrderbook({
+            bids: data.orderbook.bids,
+            asks: data.orderbook.asks,
+          })
+          
+          // Set recent trades from Slab data
+          if (data.recentTrades && data.recentTrades.length > 0) {
+            setRecentTrades(data.recentTrades)
+          }
+          
+          setLoading(false)
+          setWsConnected(true)
+        }
       } catch (error) {
-        console.error('Failed to fetch orderbook:', error)
+        console.error('Failed to fetch Slab orderbook:', error)
         setLoading(false)
+        setWsConnected(false)
+      }
+    }
+
+    // Fetch transactions
+    const fetchTransactions = async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
+        const response = await fetch(`${API_URL}/api/slab-live/transactions?limit=10`)
+        const data = await response.json()
+        
+        if (data.success) {
+          setTransactions(data.transactions)
+        }
+      } catch (error) {
+        console.error('Failed to fetch transactions:', error)
       }
     }
 
     fetchOrderbook()
+    fetchTransactions()
 
-    const interval = setInterval(fetchOrderbook, 5000)
+    const interval = setInterval(() => {
+      fetchOrderbook()
+      fetchTransactions()
+    }, 5000)
 
     return () => {
       clearInterval(interval)
@@ -913,8 +951,8 @@ const OrderBook = ({ symbol }: { symbol: string }) => {
     : '0.00'
 
   return (
-    <div className="w-full h-full bg-black/20 rounded-2xl border border-[#181825] overflow-hidden">
-      <div className="h-12 flex items-center justify-between px-4 border-b border-[#181825]">
+    <div className="w-full h-full bg-black/20 rounded-2xl border border-[#181825] overflow-hidden flex flex-col">
+      <div className="h-12 flex items-center justify-between px-4 border-b border-[#181825] flex-shrink-0">
         <div className="flex space-x-4">
           <button 
             onClick={() => setActiveTab('orderbook')}
@@ -938,20 +976,23 @@ const OrderBook = ({ symbol }: { symbol: string }) => {
           {loading && <span className="text-xs text-gray-500 ml-2">Loading...</span>}
         </div>
         
-        {/* API Status */}
+        {/* API Status - Real Slab Connection */}
         <div className="flex items-center space-x-2">
           <div className={cn(
             "w-2 h-2 rounded-full",
-            !loading ? "bg-green-400" : "bg-yellow-400"
+            wsConnected ? "bg-green-400 animate-pulse" : "bg-yellow-400"
           )}></div>
-          <span className="text-xs text-gray-400">
-            {loading ? "Loading..." : "Live"}
+          <span className="text-xs text-green-400 font-semibold">
+            {wsConnected ? "Live from Slab" : "Connecting..."}
           </span>
         </div>
       </div>
       
-      <div className="p-4">
-        {activeTab === 'orderbook' ? (
+      {/* Split into two sections: Orderbook (top) and Transactions (bottom) */}
+      <div className="flex-1 flex flex-col min-h-0">
+        {/* Top Half - Orderbook */}
+        <div className="flex-1 p-4 overflow-y-auto border-b border-[#181825]">
+          {activeTab === 'orderbook' ? (
           <>
             <div className="grid grid-cols-3 gap-2 text-xs text-gray-400 mb-2">
               <span>Price (USDC)</span>
@@ -961,17 +1002,21 @@ const OrderBook = ({ symbol }: { symbol: string }) => {
             
             <div className="space-y-1 mb-4">
               {asks.length > 0 ? (
-                asks.reverse().map((ask, index) => (
-                  <div key={index} className="grid grid-cols-3 gap-2 text-sm relative">
-                    <div 
-                      className="absolute inset-0 bg-red-500/5 origin-left" 
-                      style={{ width: `${(ask.total / Math.max(...asks.map(a => a.total))) * 100}%` }}
-                    />
-                    <span className="text-red-400 relative z-10">{ask.price.toFixed(2)}</span>
-                    <span className="text-white relative z-10">{ask.quantity.toFixed(4)}</span>
-                    <span className="text-gray-400 relative z-10">{ask.total.toFixed(4)}</span>
-                  </div>
-                ))
+                asks.reverse().map((ask, index) => {
+                  const total = (ask.price || 0) * (ask.quantity || 0);
+                  const maxTotal = Math.max(...asks.map(a => ((a.price || 0) * (a.quantity || 0))), 1);
+                  return (
+                    <div key={index} className="grid grid-cols-3 gap-2 text-sm relative">
+                      <div 
+                        className="absolute inset-0 bg-red-500/5 origin-left" 
+                        style={{ width: `${(total / maxTotal) * 100}%` }}
+                      />
+                      <span className="text-red-400 relative z-10">{(ask.price || 0).toFixed(2)}</span>
+                      <span className="text-white relative z-10">{(ask.quantity || 0).toFixed(4)}</span>
+                      <span className="text-gray-400 relative z-10">{total.toFixed(4)}</span>
+                    </div>
+                  );
+                })
               ) : (
                 <div className="text-gray-500 text-sm text-center py-4">No asks</div>
               )}
@@ -986,17 +1031,21 @@ const OrderBook = ({ symbol }: { symbol: string }) => {
             {/* Bids */}
             <div className="space-y-1">
               {bids.length > 0 ? (
-                bids.map((bid, index) => (
-                  <div key={index} className="grid grid-cols-3 gap-2 text-sm relative">
-                    <div 
-                      className="absolute inset-0 bg-green-500/5 origin-left" 
-                      style={{ width: `${(bid.total / Math.max(...bids.map(b => b.total))) * 100}%` }}
-                    />
-                    <span className="text-green-400 relative z-10">{bid.price.toFixed(2)}</span>
-                    <span className="text-white relative z-10">{bid.quantity.toFixed(4)}</span>
-                    <span className="text-gray-400 relative z-10">{bid.total.toFixed(4)}</span>
-                  </div>
-                ))
+                bids.map((bid, index) => {
+                  const total = (bid.price || 0) * (bid.quantity || 0);
+                  const maxTotal = Math.max(...bids.map(b => ((b.price || 0) * (b.quantity || 0))), 1);
+                  return (
+                    <div key={index} className="grid grid-cols-3 gap-2 text-sm relative">
+                      <div 
+                        className="absolute inset-0 bg-green-500/5 origin-left" 
+                        style={{ width: `${(total / maxTotal) * 100}%` }}
+                      />
+                      <span className="text-green-400 relative z-10">{(bid.price || 0).toFixed(2)}</span>
+                      <span className="text-white relative z-10">{(bid.quantity || 0).toFixed(4)}</span>
+                      <span className="text-gray-400 relative z-10">{total.toFixed(4)}</span>
+                    </div>
+                  );
+                })
               ) : (
                 <div className="text-gray-500 text-sm text-center py-4">No bids</div>
               )}
@@ -1033,6 +1082,62 @@ const OrderBook = ({ symbol }: { symbol: string }) => {
             </div>
           </>
         )}
+        </div>
+
+        {/* Bottom Half - Transactions */}
+        <div className="flex-1 p-4 overflow-y-auto">
+          <h4 className="text-xs font-semibold text-zinc-400 mb-3">Slab Transactions</h4>
+          <div className="space-y-2">
+            {transactions.length === 0 ? (
+              <div className="text-center py-4 text-zinc-600 text-xs">
+                No transactions yet
+              </div>
+            ) : (
+              transactions.map((tx, i) => (
+                <a
+                  key={i}
+                  href={tx.solscanLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block p-2 bg-zinc-800/30 hover:bg-zinc-800/50 rounded border border-zinc-700/50 hover:border-zinc-600/50 transition-all group"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    {tx.err ? (
+                      <span className="text-red-400 text-[10px] font-semibold">UNSUCCESSFUL</span>
+                    ) : (
+                      <span className="text-green-400 text-[10px] font-semibold">SUCCESS</span>
+                    )}
+                    <span className="text-zinc-500 text-[9px]">
+                      {tx.blockTime ? new Date(tx.blockTime * 1000).toLocaleTimeString() : 'Pending'}
+                    </span>
+                  </div>
+                  <code className="text-[9px] font-mono text-zinc-400 group-hover:text-zinc-300 block truncate">
+                    {tx.signature.substring(0, 20)}...
+                  </code>
+                </a>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Slab Info Footer */}
+      <div className="px-4 py-2 bg-blue-900/10 border-t border-blue-700/30 flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="text-[9px] text-blue-300 font-semibold">
+            Real Slab
+          </div>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText('5Yd2fL7f1DhmNL3u82ptZ21CUpFJHYs1Fqfg2Qs9CLDB');
+              // Show brief toast or visual feedback (optional)
+            }}
+            className="text-[9px] text-zinc-400 hover:text-blue-300 font-mono transition-colors cursor-pointer"
+            title="Click to copy Slab address"
+          >
+            5Yd2...CLDB
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -2563,13 +2668,6 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
                 <path d="M12 8h.01"/>
               </svg>
             </button>
-            <Link 
-              href="/monitor"
-              className="h-7 px-3 flex items-center gap-1.5 text-[11px] font-medium bg-gradient-to-r from-orange-500/20 to-yellow-500/10 hover:from-orange-500/30 hover:to-yellow-500/20 border border-orange-500/30 rounded-md transition-all duration-200 text-orange-300 hover:text-orange-200"
-            >
-              <Activity className="w-3 h-3" />
-              <span>Monitor</span>
-            </Link>
         </div>
       </div>
       
@@ -3321,6 +3419,34 @@ export default function TradingDashboard() {
         staticity={30}
         ease={80}
       />
+
+      {/* Testnet Notice Banner */}
+      <div className="relative z-20 bg-gradient-to-r from-yellow-900/30 to-orange-900/30 border-b border-yellow-700/50">
+        <div className="max-w-[1600px] mx-auto px-6 py-3">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-center gap-3 text-sm flex-wrap">
+              <span className="text-yellow-400 font-bold">⚠️ DEVNET TESTNET ONLY</span>
+              <span className="text-zinc-300">•</span>
+              <span className="text-zinc-300">
+                Make sure you're using <strong className="text-yellow-300">Devnet SOL</strong> (not real SOL!)
+              </span>
+              <span className="text-zinc-300">•</span>
+              <a 
+                href="https://faucet.solana.com" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 underline font-semibold"
+              >
+                Get Free Testnet SOL →
+              </a>
+            </div>
+            <div className="flex items-center justify-center gap-2 text-xs text-zinc-400">
+              <span>📱 Phantom Setup:</span>
+              <span className="text-zinc-500">Settings → Developer Settings → Enable Testnet Mode → Select "Solana Devnet"</span>
+            </div>
+          </div>
+        </div>
+      </div>
       
       <main className="relative z-10 p-4 space-y-3">
         
@@ -3360,31 +3486,44 @@ export default function TradingDashboard() {
             </motion.div>
           )}
           
-          <div className="wallet-adapter-button-trigger-wrapper ml-auto">
-            {mounted ? (
-              <WalletMultiButton />
-            ) : (
-              <div style={{ 
-                height: '32px',
-                fontSize: '12px',
-                padding: '0 16px',
-                backgroundColor: 'rgba(184, 184, 255, 0.1)',
-                borderRadius: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                color: '#B8B8FF'
-              }}>
-                Loading...
-              </div>
-            )}
+          <div className="flex items-center gap-3 ml-auto">
+            <Link href="/monitor">
+              <button className="px-4 py-2 rounded-lg bg-orange-600/20 hover:bg-orange-600/30 border border-orange-500/50 text-orange-400 text-sm font-bold transition-all flex items-center gap-2">
+                <Activity className="w-4 h-4" />
+                Monitor
+              </button>
+            </Link>
+            <Link href="/v0">
+              <button className="px-4 py-2 rounded-lg bg-green-600/20 hover:bg-green-600/30 border border-green-500/50 text-green-400 text-sm font-bold transition-all">
+                v0 POC
+              </button>
+            </Link>
+            <div className="wallet-adapter-button-trigger-wrapper">
+              {mounted ? (
+                <WalletMultiButton />
+              ) : (
+                <div style={{ 
+                  height: '32px',
+                  fontSize: '12px',
+                  padding: '0 16px',
+                  backgroundColor: 'rgba(184, 184, 255, 0.1)',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  color: '#B8B8FF'
+                }}>
+                  Loading...
+                </div>
+              )}
+            </div>
           </div>
         </div>
         
 
         {/* Main Trading Interface */}
         <div className="grid grid-cols-12 gap-4 min-h-[calc(100vh-180px)]">
-          {/* Center - Chart (like the screenshot) */}
-          <div className="col-span-7">
+          {/* Center - Chart */}
+          <div className="col-span-6">
             <TradingViewChartComponent 
               symbol={selectedSymbol} 
               selectedCoin={selectedCoin}
@@ -3396,12 +3535,12 @@ export default function TradingDashboard() {
             />
           </div>
 
-          {/* Next to chart - Order Book only */}
-          <div className="col-span-2">
+          {/* Order Book + Transactions (Wider) */}
+          <div className="col-span-3">
             <OrderBook symbol={selectedSymbol} />
           </div>
 
-          {/* Rightmost - Order Form (wider) */}
+          {/* Rightmost - Order Form */}
           <div className="col-span-3">
             {tradingMode === "simple" ? (
               <OrderForm selectedCoin={selectedCoin} />
