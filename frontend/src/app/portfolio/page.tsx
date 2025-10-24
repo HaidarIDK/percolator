@@ -6,7 +6,7 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui"
 import { Particles } from "@/components/ui/particles"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
-import { ArrowLeft, ExternalLink, TrendingUp, TrendingDown, Wallet as WalletIcon, Activity, DollarSign } from "lucide-react"
+import { ArrowLeft, ExternalLink, Wallet as WalletIcon, Activity, DollarSign } from "lucide-react"
 
 interface Transaction {
   signature: string
@@ -34,7 +34,6 @@ export default function PortfolioPage() {
   const [mounted, setMounted] = useState(false)
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [positions, setPositions] = useState<Position[]>([])
-  const [portfolio, setPortfolio] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -58,12 +57,12 @@ export default function PortfolioPage() {
         
         if (txData.success && txData.transactions) {
           // Filter transactions by wallet address
-          const walletTxs = txData.transactions.filter((tx: any) => 
+          const walletTxs = txData.transactions.filter((tx: { signer?: string }) => 
             tx.signer && tx.signer === walletAddress
           )
           
           // Convert Slab transactions to Transaction format
-          const realTxs: Transaction[] = walletTxs.map((tx: any, index: number) => {
+          const realTxs: Transaction[] = walletTxs.map((tx: { signature: string; blockTime?: number; err?: unknown }, index: number) => {
             // Alternate between Reserve and Commit based on index
             const isReserve = index % 2 === 0;
             

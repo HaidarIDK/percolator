@@ -23,9 +23,9 @@ export default function SimpleTradePage() {
   const [mode, setMode] = useState<'reserve' | 'commit'>('reserve')
   
   // Order book state for YOUR Slab account
-  const [orderbook, setOrderbook] = useState<any>(null)
-  const [recentTrades, setRecentTrades] = useState<any[]>([])
-  const [transactions, setTransactions] = useState<any[]>([])
+  const [orderbook, setOrderbook] = useState<{ bids: { price: number; quantity: number }[]; asks: { price: number; quantity: number }[]; midPrice?: number; spread?: number } | null>(null)
+  const [recentTrades, setRecentTrades] = useState<Array<{ price: number; quantity: number; timestamp: number; side: string }>>([])
+  const [transactions, setTransactions] = useState<Array<{ signature: string; blockTime?: number; err?: unknown; signer?: string; solscanLink?: string; slot?: number; memo?: string }>>([])
   const [balance, setBalance] = useState<number>(0)
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
 
@@ -242,12 +242,13 @@ export default function SimpleTradePage() {
           setMode('reserve')
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Trade failed:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
       toast({ 
         type: 'error', 
         title: 'Trade Failed', 
-        message: error.message || 'Unknown error occurred' 
+        message: errorMessage
       });
     } finally {
       setSubmitting(false)
@@ -278,7 +279,7 @@ export default function SimpleTradePage() {
               <span className="text-yellow-400 font-bold">⚠️ DEVNET TESTNET ONLY</span>
               <span className="text-zinc-300">•</span>
               <span className="text-zinc-300">
-                Make sure you're using <strong className="text-yellow-300">Devnet SOL</strong> (not real SOL!)
+                Make sure you&apos;re using <strong className="text-yellow-300">Devnet SOL</strong> (not real SOL!)
               </span>
               <span className="text-zinc-300">•</span>
               <a 
@@ -292,7 +293,7 @@ export default function SimpleTradePage() {
             </div>
             <div className="flex items-center justify-center gap-2 text-xs text-zinc-400">
               <span>📱 Phantom Setup:</span>
-              <span className="text-zinc-500">Settings → Developer Settings → Enable Testnet Mode → Select "Solana Devnet"</span>
+              <span className="text-zinc-500">Settings → Developer Settings → Enable Testnet Mode → Select &quot;Solana Devnet&quot;</span>
             </div>
           </div>
         </div>
@@ -662,8 +663,9 @@ export default function SimpleTradePage() {
                           duration: 15000
                         });
                       }
-                    } catch (error: any) {
-                      toast({ type: 'error', title: 'Test Failed', message: error.message });
+                    } catch (error: unknown) {
+                      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+                      toast({ type: 'error', title: 'Test Failed', message: errorMessage });
                     } finally {
                       setSubmitting(false);
                     }

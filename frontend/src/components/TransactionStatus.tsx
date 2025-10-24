@@ -145,12 +145,12 @@ export function TransactionStatus({ state, signature, error, onClose }: Transact
 export function useTransactionStatus() {
   const [state, setState] = useState<TransactionState>('idle');
   const [signature, setSignature] = useState<string>();
-  const [error, setError] = useState<string>();
+  const [error, setErrorMessage] = useState<string>();
 
   const reset = () => {
     setState('idle');
     setSignature(undefined);
-    setError(undefined);
+    setErrorMessage(undefined);
   };
 
   const setBuilding = () => setState('building');
@@ -162,7 +162,7 @@ export function useTransactionStatus() {
     setState('success');
   };
   const setError = (err: string) => {
-    setError(err);
+    setErrorMessage(err);
     setState('error');
   };
 

@@ -108,7 +108,7 @@ export interface ServerWebSocketMessage {
 class ServerWebSocketClient {
   private ws: WebSocket | null = null;
   private subscriptions = new Set<string>();
-  private messageHandlers = new Map<string, (data: any) => void>();
+  private messageHandlers = new Map<string, (data: unknown) => void>();
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
@@ -283,7 +283,7 @@ class ServerWebSocketClient {
     }
   }
 
-  onMessage(handler: (data: any) => void): () => void {
+  onMessage(handler: (data: unknown) => void): () => void {
     const id = Math.random().toString(36).slice(2);
     this.messageHandlers.set(id, handler);
     return () => this.messageHandlers.delete(id);
@@ -483,7 +483,7 @@ class PercolatorAPIClient {
     this.serverWs.unsubscribeFromCandle(symbol, interval);
   }
 
-  onServerMessage(handler: (data: any) => void): () => void {
+  onServerMessage(handler: (data: unknown) => void): () => void {
     return this.serverWs.onMessage(handler);
   }
 
