@@ -169,7 +169,7 @@ slabRouter.get('/transactions', async (req, res) => {
           });
           
           // Extract fee payer (signer) from account keys
-          let signer = 'Trader';
+          let signer = '';
           if (txDetails) {
             const accountKeys = txDetails.transaction.message.accountKeys;
             if (accountKeys && accountKeys.length > 0) {
@@ -196,7 +196,7 @@ slabRouter.get('/transactions', async (req, res) => {
             blockTime: sig.blockTime,
             err: sig.err,
             memo: sig.memo,
-            signer: 'Trader',
+            signer: '',
             solscanLink: `https://solscan.io/tx/${sig.signature}?cluster=devnet`
           };
         }

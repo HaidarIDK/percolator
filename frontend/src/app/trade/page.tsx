@@ -520,12 +520,14 @@ export default function SimpleTradePage() {
                             {tx.blockTime ? new Date(tx.blockTime * 1000).toLocaleString() : 'Pending'}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="text-zinc-500">Wallet:</span>
-                          <code className="text-zinc-400 font-mono">
-                            {tx.signer ? `${tx.signer.substring(0, 6)}...${tx.signer.substring(tx.signer.length - 4)}` : 'Unknown'}
-                          </code>
-                        </div>
+                        {tx.signer && tx.signer.length > 8 && (
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="text-zinc-500">Wallet:</span>
+                            <code className="text-zinc-400 font-mono">
+                              {`${tx.signer.substring(0, 6)}...${tx.signer.substring(tx.signer.length - 4)}`}
+                            </code>
+                          </div>
+                        )}
                         <div className="flex items-center justify-between">
                         <code className="text-xs font-mono text-zinc-400 group-hover:text-zinc-300">
                           {tx.signature.substring(0, 16)}...{tx.signature.substring(tx.signature.length - 16)}

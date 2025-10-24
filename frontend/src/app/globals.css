@@ -425,6 +425,12 @@ body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  position: relative !important;
+}
+
+.wallet-adapter-button-trigger-wrapper {
+  position: relative !important;
+  z-index: 9999 !important;
 }
 
 .wallet-adapter-button:hover {
@@ -468,6 +474,7 @@ body {
   border-radius: 16px !important;
   box-shadow: 0 0 30px rgba(184, 184, 255, 0.1) !important;
   transition: all 0.3s ease !important;
+  z-index: 99999 !important;
 }
 
 .wallet-adapter-modal-wrapper .wallet-adapter-button {
@@ -501,16 +508,23 @@ body {
   border-radius: 12px !important;
   backdrop-filter: blur(12px) !important;
   box-shadow: 0 0 20px rgba(184, 184, 255, 0.1) !important;
+  z-index: 9999 !important;
+  position: relative !important;
 }
 
 .wallet-adapter-dropdown-list {
-  visibility: hidden;
   background: rgba(0, 0, 0, 1) !important;
   border: 0px solid rgba(184, 184, 255, 0.2) !important;
   border-radius: 12px !important;
   padding: 0.75rem !important;
   backdrop-filter: blur(12px) !important;
   box-shadow: 0 0 20px rgba(184, 184, 255, 0.1) !important;
+  z-index: 9999 !important;
+  position: absolute !important;
+  top: 100% !important;
+  right: 0 !important;
+  margin-top: 0.5rem !important;
+  min-width: 200px !important;
 }
 
 .wallet-adapter-dropdown-list li {
@@ -565,6 +579,7 @@ body {
 
 .wallet-adapter-modal-overlay {
   backdrop-filter: blur(12px);
+  z-index: 99998 !important;
 }
 
 /* Hide native number input spinners */

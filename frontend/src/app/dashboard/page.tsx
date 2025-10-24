@@ -48,7 +48,7 @@ import { createChart, ColorType, IChartApi, ISeriesApi, CandlestickSeries, Time,
 import axios from "axios"
 
 // Lightweight Charts Component
-function LightweightChart({ coinId, timeframe }: { coinId: "ethereum" | "bitcoin" | "solana", timeframe: "15" | "60" | "240" | "D" }) {
+function LightweightChart({ coinId, timeframe, onPriceUpdate }: { coinId: "ethereum" | "bitcoin" | "solana", timeframe: "15" | "60" | "240" | "D", onPriceUpdate?: (price: number) => void }) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<any> | null>(null);
@@ -302,6 +302,11 @@ function LightweightChart({ coinId, timeframe }: { coinId: "ethereum" | "bitcoin
               candlestickSeries.update(candle);
               setCurrentPrice(candleData.close);
               setPriceChange(candleData.priceChangePercent);
+              
+              // Share price with parent (order form)
+              if (onPriceUpdate) {
+                onPriceUpdate(candleData.close);
+              }
             } else {
               console.log("⏭️ Skipping candle - not for current chart");
             }
@@ -493,7 +498,8 @@ const TradingViewChartComponent = ({
   selectedTimeframe,
   onTimeframeChange,
   tradingMode,
-  onTradingModeChange
+  onTradingModeChange,
+  onPriceUpdate
 }: { 
   symbol?: string;
   selectedCoin: "ethereum" | "bitcoin" | "solana";
@@ -502,6 +508,7 @@ const TradingViewChartComponent = ({
   onTimeframeChange: (timeframe: "15" | "60" | "240" | "D") => void;
   tradingMode: "simple" | "advanced";
   onTradingModeChange: (mode: "simple" | "advanced") => void;
+  onPriceUpdate?: (price: number) => void;
 }) => {
   const [chartData, setChartData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -872,18 +879,19 @@ const TradingViewChartComponent = ({
       
       {/* Lightweight Charts */}
       <div className="transition-all duration-300 h-[calc(100vh-200px)]">
-        <LightweightChartMemo coinId={selectedCoin} timeframe={selectedTimeframe}/>
+        <LightweightChartMemo coinId={selectedCoin} timeframe={selectedTimeframe} onPriceUpdate={onPriceUpdate}/>
       </div>
     </div>
   )
 }
 
-const OrderBook = ({ symbol }: { symbol: string }) => {
+const OrderBook = ({ symbol, walletAddress }: { symbol: string; walletAddress?: string }) => {
   const [orderbook, setOrderbook] = useState<Orderbook | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'orderbook' | 'trades'>('orderbook')
   const [recentTrades, setRecentTrades] = useState<any[]>([])
-  const [transactions, setTransactions] = useState<any[]>([])
+  const [transactions, setTransactions] = useState<any[]>([]) // All transactions (unfiltered)
+  const [walletTransactions, setWalletTransactions] = useState<any[]>([]) // Wallet-filtered transactions
   const [wsConnected, setWsConnected] = useState(false)
 
   useEffect(() => {
@@ -899,6 +907,7 @@ const OrderBook = ({ symbol }: { symbol: string }) => {
           setOrderbook({
             bids: data.orderbook.bids,
             asks: data.orderbook.asks,
+            lastUpdate: Date.now()
           })
           
           // Set recent trades from Slab data
@@ -920,11 +929,22 @@ const OrderBook = ({ symbol }: { symbol: string }) => {
     const fetchTransactions = async () => {
       try {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
-        const response = await fetch(`${API_URL}/api/slab-live/transactions?limit=10`)
+        const response = await fetch(`${API_URL}/api/slab-live/transactions?limit=50`)
         const data = await response.json()
         
         if (data.success) {
+          // Store all transactions (unfiltered) for Slab Transactions section
           setTransactions(data.transactions)
+          
+          // Filter transactions by wallet address for "Last trades" tab
+          if (walletAddress) {
+            const filteredTxs = data.transactions.filter((tx: any) => 
+              tx.signer && tx.signer === walletAddress
+            )
+            setWalletTransactions(filteredTxs)
+          } else {
+            setWalletTransactions([])
+          }
         }
       } catch (error) {
         console.error('Failed to fetch transactions:', error)
@@ -942,7 +962,7 @@ const OrderBook = ({ symbol }: { symbol: string }) => {
     return () => {
       clearInterval(interval)
     }
-  }, [symbol])
+  }, [symbol, walletAddress])
 
   const asks = orderbook?.asks.slice(0, 10) || []
   const bids = orderbook?.bids.slice(0, 10) || []
@@ -1053,30 +1073,58 @@ const OrderBook = ({ symbol }: { symbol: string }) => {
           </>
         ) : (
           <>
-            {/* Last Trades Tab */}
-            <div className="grid grid-cols-3 gap-2 text-xs text-gray-400 mb-2">
-              <span>Price (USDC)</span>
-              <span>Qty</span>
-              <span>Time</span>
-            </div>
-            
-            <div className="space-y-1 max-h-[600px] overflow-y-auto">
-              {recentTrades.length > 0 ? (
-                recentTrades.map((trade, index) => (
-                  <div key={index} className="grid grid-cols-3 gap-2 text-sm">
-                    <span className={trade.side === 'buy' ? "text-green-400" : "text-red-400"}>
-                      {trade.price?.toFixed(2) || '0.00'}
-                    </span>
-                    <span className="text-white">{trade.quantity?.toFixed(4) || '0.0000'}</span>
-                    <span className="text-gray-400 text-xs" suppressHydrationWarning>
-                      {new Date(trade.timestamp || Date.now()).toLocaleTimeString()}
-                    </span>
-                  </div>
-                ))
+            {/* Last Trades Tab - Shows wallet's filtered transactions */}
+            <div className="space-y-2 max-h-[600px] overflow-y-auto">
+              {walletTransactions.length > 0 ? (
+                walletTransactions.slice(0, 10).map((tx, i) => {
+                  const isReserve = i % 2 === 0;
+                  const typeColor = isReserve ? 'blue' : 'green';
+                  const typeBg = isReserve ? 'bg-blue-900/10' : 'bg-green-900/10';
+                  const typeBorder = isReserve ? 'border-blue-700/20' : 'border-green-700/20';
+                  const typeLabel = isReserve ? 'RESERVE' : 'COMMIT';
+                  
+                  return (
+                    <a
+                      key={i}
+                      href={tx.solscanLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`block p-2 ${typeBg} hover:bg-zinc-800/50 rounded border ${typeBorder} transition-all group`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          {tx.err ? (
+                            <span className="text-red-400 text-[10px] font-semibold">UNSUCCESSFUL</span>
+                          ) : (
+                            <span className="text-green-400 text-[10px] font-semibold">SUCCESS</span>
+                          )}
+                          <span className={`text-${typeColor}-400 text-[9px] font-mono bg-${typeColor}-900/30 px-1.5 py-0.5 rounded border border-${typeColor}-700/50`}>
+                            {typeLabel}
+                          </span>
+                        </div>
+                        <span className="text-zinc-500 text-[9px]">
+                          {tx.blockTime ? new Date(tx.blockTime * 1000).toLocaleTimeString() : 'Pending'}
+                        </span>
+                      </div>
+                      <code className={`text-[9px] font-mono text-${typeColor}-300 group-hover:text-${typeColor}-200 block truncate`}>
+                        {tx.signature.substring(0, 24)}...
+                      </code>
+                    </a>
+                  );
+                })
               ) : (
                 <div className="text-gray-500 text-sm text-center py-8">
-                  No recent trades
-                  <div className="text-xs mt-2">Waiting for live data...</div>
+                  {walletAddress ? (
+                    <>
+                      <div className="text-zinc-500 mb-1">No trades from your wallet yet</div>
+                      <div className="text-zinc-700 text-xs">Make a trade to see it here!</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-zinc-500 mb-1">Connect wallet to see your trades</div>
+                      <div className="text-zinc-700 text-xs">Your Reserve/Commit transactions will appear here</div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -1086,7 +1134,14 @@ const OrderBook = ({ symbol }: { symbol: string }) => {
 
         {/* Bottom Half - Transactions */}
         <div className="flex-1 p-4 overflow-y-auto">
-          <h4 className="text-xs font-semibold text-zinc-400 mb-3">Slab Transactions</h4>
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-xs font-semibold text-zinc-400">
+              Slab Transactions
+            </h4>
+            <div className="text-[9px] text-zinc-500 bg-zinc-900/20 px-2 py-0.5 rounded border border-zinc-700/30">
+              All Trades
+            </div>
+          </div>
           <div className="space-y-2">
             {transactions.length === 0 ? (
               <div className="text-center py-4 text-zinc-600 text-xs">
@@ -1124,12 +1179,6 @@ const OrderBook = ({ symbol }: { symbol: string }) => {
                       <span className="text-zinc-500 text-[9px]">
                         {tx.blockTime ? new Date(tx.blockTime * 1000).toLocaleTimeString() : 'Pending'}
                       </span>
-                    </div>
-                    <div className="flex items-center justify-between text-[9px] mb-1">
-                      <span className="text-zinc-500">Wallet:</span>
-                      <code className="text-zinc-400 font-mono">
-                        {tx.signer ? `${tx.signer.substring(0, 4)}...${tx.signer.substring(tx.signer.length - 4)}` : 'Unknown'}
-                      </code>
                     </div>
                     <code className={`text-[9px] font-mono text-${typeColor}-300 group-hover:text-${typeColor}-200 block truncate`}>
                       {tx.signature.substring(0, 20)}...
@@ -2249,14 +2298,14 @@ Margin calculation on NET exposure:
 
 
 // Percolator Order Form Component - Portfolio Slice Based Trading
-const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "solana" }) => {
+const OrderForm = ({ selectedCoin, chartCurrentPrice }: { selectedCoin: "ethereum" | "bitcoin" | "solana"; chartCurrentPrice: number }) => {
   const wallet = useWallet();
   const { publicKey, connected, signTransaction } = wallet;
   
   const [tradeSide, setTradeSide] = useState<"buy" | "sell">("buy") // User-facing: Buy or Sell
   const [side, setSide] = useState("Reserve") // Internal: Reserve or Commit
   const [selectedSlice, setSelectedSlice] = useState("Slice 1")
-  const [orderType, setOrderType] = useState("Limit")
+  const [orderType, setOrderType] = useState("Market")
   const [price, setPrice] = useState("")
   const [quantity, setQuantity] = useState("")
   const [capLimit, setCapLimit] = useState("100")
@@ -2268,6 +2317,7 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
   const [modalOpen, setModalOpen] = useState(false)
   const [modalContent, setModalContent] = useState<{ title: string; message: string; type: 'success' | 'error' | 'info' | 'warning' }>({ title: '', message: '', type: 'info' })
   const [currentMarketPrice, setCurrentMarketPrice] = useState<number>(0)
+  const [solBalance, setSolBalance] = useState<number>(0)
   const [toasts, setToasts] = useState<Array<{ id: string; message: string; type: 'success' | 'error' | 'warning' | 'info' }>>([]);
   const [realPrice, setRealPrice] = useState<number>(0);
   const [showArchitecture, setShowArchitecture] = useState(false);
@@ -2313,28 +2363,12 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
     return "USDC"; // All markets are quoted in USDC
   };
 
-  // Fetch real market price from backend
+  // Use chart's current price for the order form
   useEffect(() => {
-    const fetchPrice = async () => {
-      try {
-        const symbol = getSymbol();
-        if (!symbol) return; // Safety check
-        
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-        const response = await fetch(`${API_URL}/api/market/${symbol}/orderbook`);
-        const data = await response.json();
-        if (data.midPrice) {
-          setRealPrice(data.midPrice);
-        }
-      } catch (error) {
-        // Silent fail
-      }
-    };
-
-    fetchPrice();
-    const interval = setInterval(fetchPrice, 1000); // Update every 1 second for real-time prices
-    return () => clearInterval(interval);
-  }, [selectedCoin]);
+    if (chartCurrentPrice > 0) {
+      setRealPrice(chartCurrentPrice);
+    }
+  }, [chartCurrentPrice]);
 
   // Auto-update price field for Market orders when price changes or currency switches
   useEffect(() => {
@@ -2420,11 +2454,17 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
 
     const fetchPortfolio = async () => {
       try {
+        // Fetch real SOL balance from wallet
+        const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
+        const balance = await connection.getBalance(publicKey);
+        const solBalanceValue = balance / 1e9;
+        setSolBalance(solBalanceValue);
+        
         const walletAddress = publicKey.toBase58();
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
         const data = await fetch(`${API_URL}/api/user/${walletAddress}/portfolio`);
         const portfolioData = await data.json();
-        setPortfolio(portfolioData);
+        setPortfolio({ ...portfolioData, solBalance: solBalanceValue });
       } catch (error) {
         console.error('Failed to fetch portfolio:', error);
       }
@@ -2787,7 +2827,7 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-gray-400">SOL Balance:</span>
-                <span className="text-white">{portfolio?.equity ? portfolio.equity.toFixed(3) : '0.000'} SOL</span>
+                <span className="text-white">{portfolio?.solBalance !== undefined ? portfolio.solBalance.toFixed(3) : '0.000'} SOL</span>
               </div>
               <div className="flex justify-between text-xs border-t border-[#181825] pt-1">
                 <span className="text-gray-400 text-[10px]">Tx Fee (each):</span>
@@ -2809,7 +2849,7 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
               value={price}
               onChange={(e) => setPrice(e.target.value)}
               className="w-full bg-[#181825] border border-[#181825] focus:border-[#B8B8FF]/50 focus:ring-[#B8B8FF]/20 rounded-xl px-4 py-3 pr-24 text-white text-base font-medium focus:outline-none transition-all duration-300 hover:border-[#181825]/80"
-              placeholder={orderType === "Market" ? "Market Price" : "Enter price..."}
+              placeholder={realPrice > 0 ? realPrice.toFixed(2) : "Enter price..."}
               disabled={orderType === "Market"}
             />
             {orderType === "Limit" && (
@@ -2818,10 +2858,11 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
                 <button
                   onClick={() => {
                     if (realPrice > 0) {
-                      setPrice(realPrice.toFixed(4));
+                      setPrice(realPrice.toFixed(2));
                     }
                   }}
                   className="px-2 py-1 bg-[#B8B8FF]/10 hover:bg-[#B8B8FF]/20 border border-[#B8B8FF]/30 rounded-lg text-[#B8B8FF] text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={`Use current price: $${realPrice.toFixed(2)}`}
                   disabled={!realPrice}
                 >
                   Mid {realPrice > 0 ? realPrice.toFixed(2) : ''}
@@ -2863,17 +2904,42 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
               type="number"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
-              className="w-full bg-[#181825] border border-[#181825] focus:border-[#B8B8FF]/50 focus:ring-[#B8B8FF]/20 rounded-xl px-4 py-3 text-white text-base font-medium focus:outline-none transition-all duration-300 hover:border-[#181825]/80"
-              placeholder="Enter amount..."
+              className="w-full bg-[#181825] border border-[#181825] focus:border-[#B8B8FF]/50 focus:ring-[#B8B8FF]/20 rounded-xl px-4 py-3 pr-20 text-white text-base font-medium focus:outline-none transition-all duration-300 hover:border-[#181825]/80"
+              placeholder="1.0"
               step="0.1"
+              min="0.1"
             />
-            <button
-              onClick={() => setQuantity("1.0")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-gradient-to-r from-[#B8B8FF]/20 to-[#B8B8FF]/10 hover:from-[#B8B8FF]/30 hover:to-[#B8B8FF]/20 border border-[#B8B8FF]/30 rounded-lg text-[#B8B8FF] text-xs font-semibold transition-all duration-300 hover:border-[#B8B8FF]/50 hover:shadow-[0_0_15px_rgba(184,184,255,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={!connected}
-            >
-              1.0
-            </button>
+            {/* Up/Down buttons */}
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-0.5">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  const current = parseFloat(quantity || "0");
+                  setQuantity((current + 0.1).toFixed(1));
+                }}
+                className="px-2 py-0.5 bg-[#B8B8FF]/20 hover:bg-[#B8B8FF]/30 border border-[#B8B8FF]/30 rounded text-[#B8B8FF] text-xs font-bold transition-all disabled:opacity-50"
+                disabled={!connected}
+                title="Increase by 0.1"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  const current = parseFloat(quantity || "0");
+                  if (current > 0.1) {
+                    setQuantity(Math.max(0.1, current - 0.1).toFixed(1));
+                  }
+                }}
+                className="px-2 py-0.5 bg-[#B8B8FF]/20 hover:bg-[#B8B8FF]/30 border border-[#B8B8FF]/30 rounded text-[#B8B8FF] text-xs font-bold transition-all disabled:opacity-50"
+                disabled={!connected}
+                title="Decrease by 0.1"
+              >
+                −
+              </button>
+            </div>
           </div>
           {price && quantity && (
             <div className="text-xs text-gray-400 mt-1.5 flex justify-between">
@@ -3366,6 +3432,9 @@ export default function TradingDashboard() {
   const [toasts, setToasts] = useState<Array<{ id: string; message: string; type: 'success' | 'error' | 'warning' | 'info' }>>([]);
   const [mounted, setMounted] = useState(false);
   const [tradingMode, setTradingMode] = useState<"simple" | "advanced">("simple");
+  
+  // Share price between chart and order form
+  const [chartCurrentPrice, setChartCurrentPrice] = useState<number>(0);
 
   // Fix hydration error - only render wallet button after mount
   useEffect(() => {
@@ -3552,7 +3621,7 @@ export default function TradingDashboard() {
                 v0 POC
               </button>
             </Link>
-            <div className="wallet-adapter-button-trigger-wrapper">
+            <div className="wallet-adapter-button-trigger-wrapper relative z-[9999]">
               {mounted ? (
                 <WalletMultiButton />
               ) : (
@@ -3586,18 +3655,19 @@ export default function TradingDashboard() {
               onTimeframeChange={setSelectedTimeframe}
               tradingMode={tradingMode}
               onTradingModeChange={setTradingMode}
+              onPriceUpdate={setChartCurrentPrice}
             />
           </div>
 
           {/* Order Book + Transactions (Wider) */}
           <div className="col-span-3">
-            <OrderBook symbol={selectedSymbol} />
+            <OrderBook symbol={selectedSymbol} walletAddress={publicKey?.toBase58()} />
           </div>
 
           {/* Rightmost - Order Form */}
           <div className="col-span-3">
             {tradingMode === "simple" ? (
-              <OrderForm selectedCoin={selectedCoin} />
+              <OrderForm selectedCoin={selectedCoin} chartCurrentPrice={chartCurrentPrice} />
             ) : (
               <CrossSlabTrader selectedCoin={selectedCoin} />
             )}
