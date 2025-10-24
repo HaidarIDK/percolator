@@ -1,16 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  // Optimize production builds
-  compress: true,
-  poweredByHeader: false,
+  /* config options here */
   reactStrictMode: true,
+  
+  // Content Security Policy - Relaxed for Solana wallet integration
   async headers() {
     return [
       {
@@ -18,7 +12,15 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self' 'unsafe-eval' 'unsafe-inline' https://api.percolator.site wss://api.percolator.site; script-src 'self' 'unsafe-eval' 'unsafe-inline' https: blob:; style-src 'self' 'unsafe-inline' https:; style-src-elem 'self' 'unsafe-inline' https:; font-src 'self' data: https:; frame-src 'self' https:; connect-src * wss: ws: https: http: https://api.percolator.site wss://api.percolator.site; img-src 'self' data: https: http: blob:; object-src 'none'; base-uri 'self';",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https:",
+              "style-src 'self' 'unsafe-inline' https:",
+              "img-src 'self' data: https:",
+              "font-src 'self' data: https:",
+              "connect-src 'self' http://localhost:* https: wss: ws:",
+              "frame-src 'self' https:",
+            ].join('; '),
           },
         ],
       },

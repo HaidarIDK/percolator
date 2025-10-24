@@ -52,57 +52,26 @@ export default function PortfolioPage() {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
         const walletAddress = publicKey.toBase58()
         
-        // Fetch portfolio summary
-        const portfolioRes = await fetch(`${API_URL}/api/user/${walletAddress}/portfolio`)
-        const portfolioData = await portfolioRes.json()
-        setPortfolio(portfolioData)
+        // Fetch REAL Slab transactions
+        const txRes = await fetch(`${API_URL}/api/slab-live/transactions?limit=20`)
+        const txData = await txRes.json()
+        
+        if (txData.success && txData.transactions) {
+          // Convert Slab transactions to Transaction format
+          const realTxs: Transaction[] = txData.transactions.map((tx: any) => ({
+            signature: tx.signature,
+            timestamp: (tx.blockTime || 0) * 1000,
+            type: 'commit' as const, // All Slab transactions are trades for now
+            asset: 'ETH',
+            amount: 0, // We don't parse amount from logs yet
+            status: tx.err ? 'failed' : 'success' as const
+          }))
+          setTransactions(realTxs)
+        }
 
-        // Mock transactions with Solscan links (in production, fetch from on-chain)
-        const mockTxs: Transaction[] = [
-          {
-            signature: '5j7W8RqKmVx2Z9nH3FcYp1X4sT6bK8wL2gR4vN9mQ3aE',
-            timestamp: Date.now() - 3600000,
-            type: 'reserve',
-            asset: 'ETH',
-            amount: 1.5,
-            price: 3900,
-            status: 'success',
-            holdId: 123456
-          },
-          {
-            signature: '3nT5gK2pL8vM4wX9zH1sR7bY6cN4fQ8mA2xE9kP5jW7D',
-            timestamp: Date.now() - 7200000,
-            type: 'commit',
-            asset: 'ETH',
-            amount: 1.5,
-            price: 3895,
-            status: 'success',
-            holdId: 123456
-          },
-          {
-            signature: '8xR2nK4mP9wL5vT7zY3sN6bH1cQ8fM4gA9xK2pE7jW5D',
-            timestamp: Date.now() - 86400000,
-            type: 'deposit',
-            asset: 'USDC',
-            amount: 5000,
-            status: 'success'
-          }
-        ]
-        setTransactions(mockTxs)
-
-        // Mock positions
-        const mockPositions: Position[] = [
-          {
-            asset: 'ETH',
-            side: 'long',
-            size: 1.5,
-            entryPrice: 3895,
-            currentPrice: 3863.68,
-            pnl: -46.92,
-            pnlPercent: -1.20
-          }
-        ]
-        setPositions(mockPositions)
+        // For v0 POC: No real positions yet (would need on-chain position tracking)
+        // Show empty array - positions section will show "v0 POC" message
+        setPositions([])
 
         setLoading(false)
       } catch (error) {
@@ -161,52 +130,42 @@ export default function PortfolioPage() {
           <div className="space-y-6">
             {/* Portfolio Summary */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-[#0a0a0f] border border-[#181825] rounded-xl p-6">
+              <div className="bg-yellow-900/10 border border-yellow-700/30 rounded-xl p-6">
                 <div className="flex items-center space-x-2 mb-2">
-                  <DollarSign className="w-5 h-5 text-[#B8B8FF]" />
-                  <p className="text-sm text-gray-400">Total Equity</p>
+                  <DollarSign className="w-5 h-5 text-yellow-400" />
+                  <p className="text-sm text-yellow-300">v0 POC Mode</p>
                 </div>
-                <p className="text-2xl font-bold text-white">${portfolio?.equity?.toFixed(2) || '0.00'}</p>
-                <p className="text-xs text-gray-500 mt-1">Available: ${portfolio?.freeCollateral?.toFixed(2) || '0.00'}</p>
+                <p className="text-lg font-bold text-yellow-400">No Balance Tracking</p>
+                <p className="text-xs text-gray-500 mt-1">Equity tracking coming in v1</p>
               </div>
 
-              <div className="bg-[#0a0a0f] border border-[#181825] rounded-xl p-6">
+              <div className="bg-yellow-900/10 border border-yellow-700/30 rounded-xl p-6">
                 <div className="flex items-center space-x-2 mb-2">
-                  <Activity className="w-5 h-5 text-green-400" />
-                  <p className="text-sm text-gray-400">Unrealized P&L</p>
+                  <Activity className="w-5 h-5 text-yellow-400" />
+                  <p className="text-sm text-yellow-300">v0 POC Mode</p>
                 </div>
-                <p className={cn(
-                  "text-2xl font-bold",
-                  (portfolio?.unrealizedPnl || 0) >= 0 ? "text-green-400" : "text-red-400"
-                )}>
-                  {(portfolio?.unrealizedPnl || 0) >= 0 ? '+' : ''}${portfolio?.unrealizedPnl?.toFixed(2) || '0.00'}
-                </p>
+                <p className="text-lg font-bold text-yellow-400">No P&L Tracking</p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {((portfolio?.unrealizedPnl || 0) / (portfolio?.equity || 1) * 100).toFixed(2)}%
+                  P&L calculation coming in v1
                 </p>
               </div>
 
-              <div className="bg-[#0a0a0f] border border-[#181825] rounded-xl p-6">
+              <div className="bg-yellow-900/10 border border-yellow-700/30 rounded-xl p-6">
                 <div className="flex items-center space-x-2 mb-2">
-                  <WalletIcon className="w-5 h-5 text-blue-400" />
-                  <p className="text-sm text-gray-400">Margin Usage</p>
+                  <WalletIcon className="w-5 h-5 text-yellow-400" />
+                  <p className="text-sm text-yellow-300">v0 POC Mode</p>
                 </div>
-                <p className="text-2xl font-bold text-white">{portfolio?.marginUsage?.toFixed(1) || '0.0'}%</p>
-                <div className="w-full bg-gray-800 rounded-full h-2 mt-2">
-                  <div 
-                    className="bg-[#B8B8FF] h-2 rounded-full transition-all"
-                    style={{ width: `${Math.min(portfolio?.marginUsage || 0, 100)}%` }}
-                  ></div>
-                </div>
+                <p className="text-lg font-bold text-yellow-400">No Margin Tracking</p>
+                <p className="text-xs text-gray-500 mt-1">Margin calculation coming in v1</p>
               </div>
 
-              <div className="bg-[#0a0a0f] border border-[#181825] rounded-xl p-6">
+              <div className="bg-yellow-900/10 border border-yellow-700/30 rounded-xl p-6">
                 <div className="flex items-center space-x-2 mb-2">
-                  <Activity className="w-5 h-5 text-[#B8B8FF]" />
-                  <p className="text-sm text-gray-400">Open Positions</p>
+                  <Activity className="w-5 h-5 text-yellow-400" />
+                  <p className="text-sm text-yellow-300">v0 POC Mode</p>
                 </div>
-                <p className="text-2xl font-bold text-white">{positions.length}</p>
-                <p className="text-xs text-gray-500 mt-1">Across all markets</p>
+                <p className="text-lg font-bold text-yellow-400">No Position Tracking</p>
+                <p className="text-xs text-gray-500 mt-1">Position tracking coming in v1</p>
               </div>
             </div>
 

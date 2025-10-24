@@ -1093,29 +1093,50 @@ const OrderBook = ({ symbol }: { symbol: string }) => {
                 No transactions yet
               </div>
             ) : (
-              transactions.map((tx, i) => (
-                <a
-                  key={i}
-                  href={tx.solscanLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block p-2 bg-zinc-800/30 hover:bg-zinc-800/50 rounded border border-zinc-700/50 hover:border-zinc-600/50 transition-all group"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    {tx.err ? (
-                      <span className="text-red-400 text-[10px] font-semibold">UNSUCCESSFUL</span>
-                    ) : (
-                      <span className="text-green-400 text-[10px] font-semibold">SUCCESS</span>
-                    )}
-                    <span className="text-zinc-500 text-[9px]">
-                      {tx.blockTime ? new Date(tx.blockTime * 1000).toLocaleTimeString() : 'Pending'}
-                    </span>
-                  </div>
-                  <code className="text-[9px] font-mono text-zinc-400 group-hover:text-zinc-300 block truncate">
-                    {tx.signature.substring(0, 20)}...
-                  </code>
-                </a>
-              ))
+              transactions.map((tx, i) => {
+                // Alternate between Reserve and Commit (pairs)
+                const isReserve = i % 2 === 0;
+                const typeColor = isReserve ? 'blue' : 'green';
+                const typeBg = isReserve ? 'bg-blue-900/20' : 'bg-green-900/20';
+                const typeBorder = isReserve ? 'border-blue-700/30' : 'border-green-700/30';
+                const typeLabel = isReserve ? 'RESERVE' : 'COMMIT';
+                
+                return (
+                  <a
+                    key={i}
+                    href={tx.solscanLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`block p-2 ${typeBg} hover:bg-zinc-800/50 rounded border ${typeBorder} hover:border-${typeColor}-600/50 transition-all group`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        {tx.err ? (
+                          <span className="text-red-400 text-[10px] font-semibold">UNSUCCESSFUL</span>
+                        ) : (
+                          <span className="text-green-400 text-[10px] font-semibold">SUCCESS</span>
+                        )}
+                        {/* Show instruction type */}
+                        <span className={`text-${typeColor}-400 text-[9px] font-mono bg-${typeColor}-900/30 px-1.5 py-0.5 rounded border border-${typeColor}-700/50`}>
+                          {typeLabel}
+                        </span>
+                      </div>
+                      <span className="text-zinc-500 text-[9px]">
+                        {tx.blockTime ? new Date(tx.blockTime * 1000).toLocaleTimeString() : 'Pending'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[9px] mb-1">
+                      <span className="text-zinc-500">Wallet:</span>
+                      <code className="text-zinc-400 font-mono">
+                        {tx.signer ? `${tx.signer.substring(0, 4)}...${tx.signer.substring(tx.signer.length - 4)}` : 'Unknown'}
+                      </code>
+                    </div>
+                    <code className={`text-[9px] font-mono text-${typeColor}-300 group-hover:text-${typeColor}-200 block truncate`}>
+                      {tx.signature.substring(0, 20)}...
+                    </code>
+                  </a>
+                );
+              })
             )}
           </div>
         </div>
@@ -2898,6 +2919,30 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
           </div>
         )}
 
+        {/* Two-Phase Trading Explainer */}
+        <div className="mb-4 p-3 bg-blue-900/10 border border-blue-700/30 rounded-lg">
+          <div className="text-xs text-blue-300 font-semibold mb-2">
+            ⚡ Two-Phase Trading
+          </div>
+          <div className="space-y-1 text-[10px] text-zinc-400">
+            <div className="flex items-center gap-2">
+              <span className="text-blue-400">Phase 1:</span>
+              <span>RESERVE - Locks liquidity for your {tradeSide.toUpperCase()}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-green-400">Phase 2:</span>
+              <span>COMMIT - Executes the {tradeSide.toUpperCase()} trade</span>
+            </div>
+          </div>
+          <div className="text-[9px] text-zinc-500 mt-2 flex items-center gap-1">
+            <span className={side === "Reserve" ? "text-blue-400 font-semibold" : "text-zinc-600"}>
+              {side === "Reserve" ? "→ Currently: Step 1 (Reserve)" : "✓ Step 1 Complete"}
+            </span>
+            {side === "Commit" && (
+              <span className="text-green-400 font-semibold">→ Ready for Step 2 (Commit)</span>
+            )}
+          </div>
+        </div>
 
         {/* Simplified Submit Button */}
         <button
@@ -2924,7 +2969,10 @@ const OrderForm = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin" | "s
           ) : (
             <span className="flex items-center justify-center gap-2">
               <span>
-                {tradeSide === "buy" ? "BUY" : "SELL"}
+                {side === "Reserve" 
+                  ? `RESERVE ${tradeSide.toUpperCase()}`
+                  : `COMMIT ${tradeSide.toUpperCase()}`
+                }
               </span>
             </span>
           )}
@@ -3487,6 +3535,12 @@ export default function TradingDashboard() {
           )}
           
           <div className="flex items-center gap-3 ml-auto">
+            <Link href="/portfolio">
+              <button className="px-4 py-2 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/50 text-purple-400 text-sm font-bold transition-all flex items-center gap-2">
+                <Wallet className="w-4 h-4" />
+                Portfolio
+              </button>
+            </Link>
             <Link href="/monitor">
               <button className="px-4 py-2 rounded-lg bg-orange-600/20 hover:bg-orange-600/30 border border-orange-500/50 text-orange-400 text-sm font-bold transition-all flex items-center gap-2">
                 <Activity className="w-4 h-4" />

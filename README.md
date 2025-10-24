@@ -1,11 +1,91 @@
 # PERColator
 
-Contract Adress: CXobgfkQT6wCysehb3abkuimkmx5chS62fZew9NBpump
+Contract Address: CXobgfkQT6wCysehb3abkuimkmx5chS62fZew9NBpump
 
 A perpetual exchange protocol on PERCS (Percolator Exchange Resource Coordination System)
 
 **Forked from:** [Toly's Percolator](https://github.com/toly-labs/percolator)  
 
+**Live Demo (v0.1)**: https://dex.percolator.site
+
+---
+
+## 🚀 v0.1 - Live Deployment on Solana Devnet
+
+### What's Currently Deployed & Working
+
+**Try it now**: https://dex.percolator.site/trade
+
+**Deployed Programs:**
+- **Slab Program**: `SLAB98WHcToiuUMMX9NQSg5E5iB8CjpK21T4h9ZXiep`
+- **Slab Account**: `5Yd2fL7f1DhmNL3u82ptZ21CUpFJHYs1Fqfg2Qs9CLDB` (3.4 KB, ~0.025 SOL rent)
+- **Router Program**: `RoutqcxkpVH8jJ2cULG9u6WbdRskQwXkJe8CqZehcyr`
+- **Router Registry**: `DK9uaWYienaQ6XEFBzsGCuKZ8ZapTMjw7Ht3s9HQMdUx` (43 KB, ~0.30 SOL rent)
+
+### ✅ v0.1 Features
+
+**Slab Program Instructions (All Working):**
+- `Initialize` (0) - Create slab account
+- `CommitFill` (1) - Router-executed fills
+- `Reserve` (2) - Lock liquidity for trading ✅ NEW
+- `Commit` (3) - Execute reservation ✅ NEW
+- `Cancel` (4) - Cancel reservation ✅ NEW
+
+**Production Frontend (Next.js + React):**
+- Full trading interface with Tolly's Reserve → Commit workflow
+- Real-time orderbook fetched from on-chain Slab account
+- Transaction history with color-coded Reserve (blue) / Commit (green)
+- Toast notification system for all events
+- Phantom/Solflare wallet integration
+- Dashboard with live price charts (ETH, BTC, SOL)
+- Portfolio page with real transaction history
+- Testnet warning banners with Phantom setup instructions
+- Production deployment on HTTPS (Vercel)
+
+**Backend API (Node.js + Express):**
+- REST endpoints: `/api/trade/reserve`, `/api/trade/commit`, `/api/trade/record-fill`
+- Live Slab data: `/api/slab-live/orderbook`, `/api/slab-live/transactions`
+- Transaction builders with unique blockhash per trade
+- Active order tracking in memory
+- Wallet signer display for each transaction
+- Deployed on Render with auto-scaling
+
+**Key Achievements:**
+- ✅ Two-phase Reserve/Commit trading works end-to-end on-chain
+- ✅ Transactions execute successfully (verify on Solscan)
+- ✅ Multiple trades from same wallet (unique route_id + blockhash)
+- ✅ Real Slab orderbook data (no mock data)
+- ✅ Wallet addresses shown for every Reserve/Commit
+- ✅ Production HTTPS deployment (fixes Phantom wallet security)
+- ✅ Toast notifications replace all alerts
+- ✅ Color-coded transaction types for clarity
+
+### ⚠️ v0.1 Limitations (Proof of Concept)
+
+Current behavior:
+- Reserve/Commit instructions execute and log success
+- No state modification (mock mode - returns success without updating slab)
+- No real orderbook matching engine
+- No position tracking on-chain
+- No P&L calculation
+- No collateral settlement
+
+**Why POC?** v0.1 demonstrates the complete two-phase workflow, UI/UX, and blockchain integration. Full state management will be added in v1.
+
+### 💰 Cost Comparison: v0 vs v1
+
+| | v0.1 (Current POC) | v1 (Full Production) |
+|---|---|---|
+| **Slab Size** | 3.4 KB | 10 MB (10,485,760 bytes) |
+| **Deployment Cost** | ~0.025 SOL (~$5) | ~73 SOL (~$13,900) |
+| **Purpose** | Demo & testing | Live trading |
+| **Users Supported** | Testing only | 1,000+ concurrent |
+| **Orders Capacity** | Mock logging | 10,000 real orders |
+| **Matching Engine** | Logs only | Full price-time priority |
+| **Position Tracking** | None | Full on-chain tracking |
+| **Best For** | Learning & demos | Production markets |
+
+**Why 73 SOL for v1?** The 10MB account contains: 1,000 user accounts (320KB) + 10,000 orders (2.4MB) + 5,000 positions (1.4MB) + 1,000 reservations (480KB) + 2,000 slices (512KB) + trade history (800KB) + aggressor tracking (192KB). This requires ~73 SOL for rent-exemption on Solana.
 
 ---
 
@@ -70,7 +150,7 @@ This fork extends Toly's original Percolator with production-ready backend infra
 - Mock data for frontend development
 - CORS enabled, request logging, error handling
 
-**Files:** `api/src/`, `api/package.json`, `api/README.md`, `api/ENDPOINTS.md`, `api/test.html`
+**Files:** `api/src/`, `api/package.json`, `api/README.md`, `api/ENDPOINTS.md`
 
 ---
 
@@ -148,6 +228,7 @@ This fork extends Toly's original Percolator with production-ready backend infra
 - **Initialize** - Parse 114 bytes: authority, oracle, router, imr, mmr, fees, batch_ms, freeze_levels
 - **AddInstrument** - Parse 40 bytes: symbol, contract_size, tick, lot, index_price
 - **UpdateFunding** - Parse 11 bytes: update_all flag, instrument_idx, current_ts
+- **Liquidate** - Parse 24 bytes: account_idx, deficit_target, fee_bps, band_bps
 
 **Router Instruction Handlers:**
 - **Initialize** - Setup registry with program authority
@@ -169,16 +250,6 @@ This fork extends Toly's original Percolator with production-ready backend infra
 - Signer verification (prevents impersonation)
 - Data length validation (prevents buffer overflows)
 - Authority checks (only authorized users can modify state)
-
-**Slab Instruction Handlers:**
-- **Reserve** - Parse 71 bytes: account_idx, instrument_idx, side, qty, limit_px, ttl, commitment_hash, route_id
-- **Commit** - Parse 16 bytes: hold_id, current_ts; execute trades at reserved prices
-- **Cancel** - Parse 8 bytes: hold_id; release reservation
-- **BatchOpen** - Parse 10 bytes: instrument_idx, current_ts; increment epoch, promote pending
-- **Initialize** - Parse 114 bytes: authority, oracle, router, imr, mmr, fees, batch_ms, freeze_levels
-- **AddInstrument** - Parse 40 bytes: symbol, contract_size, tick, lot, index_price
-- **UpdateFunding** - Parse 11 bytes: update_all flag, instrument_idx, current_ts
-- **Liquidate** - Parse 24 bytes: account_idx, deficit_target, fee_bps, band_bps
 
 **Files:** `programs/common/src/serialize.rs`, `programs/slab/src/entrypoint.rs`, `programs/router/src/entrypoint.rs`
 
@@ -332,7 +403,7 @@ perc portfolio show
 **Purpose:** Ensure code quality and catch bugs before deployment
 
 **What It Does:**
-- 140 automated tests across all components
+- 140+ automated tests across all components
 - GitHub Actions CI that runs on every push
 - Caching for faster CI runs
 - Tests all critical paths and edge cases
@@ -340,7 +411,7 @@ perc portfolio show
 **Test Coverage:**
 - 32 tests: Common library (math, VWAP, PnL, margin, serialization)
 - 45 tests: Router (vault, escrow, caps, portfolio, registry, orchestration, liquidation, initialization)
-- 63 tests: Slab (pools, matching, anti-toxicity, reserve/commit, funding, liquidation, initialization)
+- 63+ tests: Slab (pools, matching, anti-toxicity, reserve/commit, funding, liquidation, initialization)
 
 **CI Configuration:**
 - Runs on every push and pull request
@@ -352,7 +423,7 @@ perc portfolio show
 
 ---
 
-### 7. Critical Bug Fixes (FIXED)
+### 10. Critical Bug Fixes (FIXED)
 
 **Stack Overflow Fix:**
 - Problem: 10MB SlabState caused test thread stack overflow
@@ -372,14 +443,15 @@ perc portfolio show
 
 ---
 
-### 8. Documentation (NEW)
+### 11. Documentation (NEW)
 
 **Created:**
-- `WORK_PLAN.md` - Implementation roadmap and architecture details
 - `api/README.md` - API server setup and usage
 - `api/ENDPOINTS.md` - Complete endpoint reference with examples
-- `api/test.html` - Interactive API tester
-- Updated main `README.md` with fork attribution
+- `frontend/README.md` - Frontend deployment guide
+- `frontend/SETUP.md` - Environment setup instructions
+- `scripts/README.md` - Deployment scripts
+- Updated main `README.md` with v0.1 deployment info and fork attribution
 
 ---
 
@@ -414,252 +486,14 @@ This fork is based on [Toly's Percolator](https://github.com/toly-labs/percolato
 - PDA derivation patterns
 
 **What Was NOT in Original:**
-- Router program (Haidar added this)
-- Capability token system (Haidar added this)
-- API server (Haidar added this)
-- Anti-toxicity enforcement logic (fields existed, logic was TODO - Haidar implemented)
-- Comprehensive testing (Haidar added 50 tests)
-- CI/CD (Haidar added GitHub Actions)
-
----
-
-## Getting Started
-
-### Prerequisites
-
-```bash
-# Node.js 18+ and npm
-node --version
-npm --version
-
-# Rust and Cargo
-rustc --version
-cargo --version
-
-# Solana CLI (for devnet deployment)
-solana --version
-```
-
-### Run the API Server
-
-```bash
-# Install dependencies
-cd api
-npm install
-
-# Start development server
-npm run dev
-
-# Server runs at http://localhost:3000
-```
-
-### Test the API
-
-```bash
-# Health check
-curl http://localhost:3000/api/health
-
-# Get registered slabs
-curl http://localhost:3000/api/router/slabs
-
-# Get orderbook
-curl "http://localhost:3000/api/market/orderbook?slab=test&instrument=0"
-
-# Interactive tester
-open api/test.html
-```
-
-### Build and Test Programs
-
-```bash
-# Run all tests (50 tests)
-cargo test
-
-# Test specific packages
-cargo test --package percolator-router
-cargo test --package percolator-slab
-cargo test --package percolator-common
-
-# Build for Solana
-cargo build-sbf
-```
-
----
-
-## Deployment to Devnet
-
-### 1. Configure Solana CLI
-
-```bash
-solana config set --url https://api.devnet.solana.com
-solana-keygen new --outfile ~/.config/solana/devnet.json
-solana airdrop 2
-```
-
-### 2. Build Programs
-
-```bash
-cargo build-sbf --manifest-path programs/slab/Cargo.toml
-cargo build-sbf --manifest-path programs/router/Cargo.toml
-```
-
-### 3. Deploy
-
-```bash
-solana program deploy target/deploy/percolator_slab.so
-solana program deploy target/deploy/percolator_router.so
-```
-
-### 4. Configure API
-
-Update `api/.env`:
-```env
-SLAB_PROGRAM_ID=<your-slab-id>
-ROUTER_PROGRAM_ID=<your-router-id>
-SOLANA_RPC_URL=https://api.devnet.solana.com
-SOLANA_NETWORK=devnet
-```
-
-### 5. Start API
-
-```bash
-cd api
-npm start
-```
-
----
-
-## API Endpoints
-
-**21 endpoints available:**
-
-**System (2):**
-- `GET /` - API info
-- `GET /api/health` - Health check
-
-**Market Data (4):**
-- `GET /api/market/instruments` - List instruments
-- `GET /api/market/orderbook` - Orderbook depth
-- `GET /api/market/trades` - Recent trades
-- `GET /api/market/stats` - 24h statistics
-
-**Trading (4):**
-- `POST /api/trade/order` - Place order
-- `POST /api/trade/cancel` - Cancel order
-- `POST /api/trade/reserve` - Reserve liquidity
-- `POST /api/trade/commit` - Commit trade
-
-**User (4):**
-- `GET /api/user/balance` - Balance
-- `GET /api/user/positions` - Positions
-- `GET /api/user/orders` - Orders
-- `GET /api/user/portfolio` - Portfolio
-
-**Router (6):**
-- `POST /api/router/deposit` - Deposit collateral
-- `POST /api/router/withdraw` - Withdraw
-- `GET /api/router/portfolio/:user` - Cross-slab portfolio
-- `GET /api/router/slabs` - List slabs
-- `POST /api/router/reserve-multi` - Multi-slab reserve
-- `POST /api/router/commit-multi` - Atomic multi-slab commit
-
-**WebSocket (1):**
-- `ws://localhost:3000/ws` - Real-time updates
-
-See `api/ENDPOINTS.md` for complete documentation.
-
----
-
-## Testing
-
-```bash
-# Run all 50 tests
-cargo test
-
-# Run with output
-cargo test -- --nocapture
-
-# Test specific package
-cargo test --package percolator-router --verbose
-```
-
-**Test Breakdown:**
-- 27 tests: percolator-common (math, types, calculations)
-- 12 tests: percolator-router (vault, escrow, caps, portfolio)
-- 11 tests: percolator-slab (pools, matching, anti-toxicity)
-
-**CI:** GitHub Actions runs all tests on every push
-
----
-
-## Project Structure
-
-```
-percolator/
-├── .github/workflows/        # CI configuration (Haidar)
-│   └── rust.yml             # GitHub Actions workflow
-├── api/                      # Backend API server (Haidar)
-│   ├── src/
-│   │   ├── routes/          # REST endpoints
-│   │   └── services/        # Solana + WebSocket
-│   ├── test.html            # Interactive API tester
-│   ├── ENDPOINTS.md         # Complete API reference
-│   └── package.json
-├── programs/
-│   ├── common/              # Shared types (Toly base)
-│   ├── router/              # Router program (Haidar added)
-│   │   └── src/
-│   │       ├── state/       # All state structs
-│   │       ├── instructions/# Cap operations
-│   │       └── pda.rs       # PDA derivations
-│   └── slab/               # Slab program (Toly base + Haidar enhancements)
-│       └── src/
-│           ├── matching/   # Anti-toxicity logic (Haidar implemented)
-│           └── instructions/
-├── .cargo/config.toml       # Stack size config (Haidar)
-├── WORK_PLAN.md             # Implementation guide (Haidar)
-└── README.md                # This file
-```
-
----
-
-## Technology Stack
-
-- **Language:** Rust (no_std, zero heap allocations)
-- **Framework:** Pinocchio v0.9.2 (from Toly's original)
-- **API Backend:** Node.js + TypeScript + Express (Haidar added)
-- **Real-time:** WebSocket (Haidar added)
-- **Blockchain:** Solana devnet → mainnet
-
----
-
-## Next Steps
-
-**Immediate:**
-- Deploy to devnet
-- Frontend integration testing
-- User acceptance testing
-
-**Short Term:**
-- Perp-specific features (funding rates)
-- Multi-slab atomic routing
-- Liquidation engine
-- More instruments
-
-**Long Term:**
-- Mainnet deployment
-- Security audit
-- Performance optimization
-- Advanced order types
-
----
-
-## References
-
-- **Original Project:** [Toly's Percolator](https://github.com/toly-labs/percolator)
-- **Solana Docs:** [docs.solana.com](https://docs.solana.com)
-- **Pinocchio:** [github.com/anza-xyz/pinocchio](https://github.com/anza-xyz/pinocchio)
-- **Devnet Explorer:** [solscan.io/?cluster=devnet](https://solscan.io/?cluster=devnet)
+- Router program (added in this fork)
+- Capability token system (added in this fork)
+- API server (added in this fork)
+- Frontend UI (added in this fork)
+- Anti-toxicity enforcement logic (fields existed, logic was TODO - implemented in this fork)
+- Comprehensive testing (added 140+ tests in this fork)
+- CI/CD (added GitHub Actions in this fork)
+- Production deployment (added in this fork)
 
 ---
 
@@ -677,6 +511,64 @@ Apache-2.0 (same as original Percolator)
 
 ---
 
-**Last Updated:** October 20, 2025  
+---
+
+## 🔨 Building the Programs
+
+### Quick Build (Windows)
+
+```bash
+# Build all 4 programs at once
+.\build-bpf.ps1
+```
+
+This builds:
+1. **Common library** (shared types)
+2. **Slab program** → `target/deploy/percolator_slab.so`
+3. **Router program** → `target/deploy/percolator_router.so`
+4. **AMM program** → `target/deploy/percolator_amm.so`
+5. **Oracle program** → `target/deploy/percolator_oracle.so`
+
+### Build on Linux/Mac
+
+```bash
+# Make executable
+chmod +x build-all-bpf.sh
+
+# Build all programs
+./build-all-bpf.sh
+```
+
+### Manual Build (Individual Programs)
+
+```bash
+# Build just the Slab program
+cargo-build-sbf --manifest-path programs/slab/Cargo.toml
+
+# Build just the Router program
+cargo-build-sbf --manifest-path programs/router/Cargo.toml
+```
+
+### Prerequisites
+
+- Solana CLI tools installed
+- Rust toolchain
+- cargo-build-sbf (comes with Solana CLI)
+
+Install Solana CLI:
+```bash
+sh -c "$(curl -sSfL https://release.solana.com/stable/install)"
+```
+
+---
+
+## 📁 Project Directories
+
+### `archive/`
+Contains old/unused code and experiments that are **not part of the current implementation**. This folder is kept for reference but can be safely ignored. The active codebase is in `programs/`, `api/`, and `frontend/`.
+
+---
+
+**Last Updated:** October 24, 2025  
 **Maintainer:** Haidar  
 **Original Author:** Toly

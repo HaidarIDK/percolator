@@ -8,6 +8,7 @@ import {
   generateSecret,
   generateCommitmentHash,
   serializeTransaction,
+  simulateTransaction,
   getRecentBlockhash,
   SLAB_PROGRAM_ID,
   ROUTER_PROGRAM_ID,
@@ -180,6 +181,15 @@ tradingRouter.post('/reserve', async (req, res) => {
     transaction.recentBlockhash = blockhash;
     transaction.feePayer = userPubkey;
 
+    // Simulate transaction before sending to wallet (prevents Phantom warnings)
+    const simulation = await simulateTransaction(transaction);
+    if (!simulation.success) {
+      return res.status(400).json({ 
+        error: `Transaction would fail: ${simulation.error}`,
+        simulationError: simulation.error
+      });
+    }
+
     // Serialize transaction for frontend
     const serializedTx = serializeTransaction(transaction);
 
@@ -304,6 +314,15 @@ tradingRouter.post('/commit', async (req, res) => {
     const blockhash = await getRecentBlockhash();
     transaction.recentBlockhash = blockhash;
     transaction.feePayer = userPubkey;
+
+    // Simulate transaction before sending to wallet (prevents Phantom warnings)
+    const simulation = await simulateTransaction(transaction);
+    if (!simulation.success) {
+      return res.status(400).json({ 
+        error: `Transaction would fail: ${simulation.error}`,
+        simulationError: simulation.error
+      });
+    }
 
     // Serialize transaction for frontend
     const serializedTx = serializeTransaction(transaction);

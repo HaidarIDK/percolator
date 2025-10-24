@@ -159,17 +159,54 @@ slabRouter.get('/transactions', async (req, res) => {
       { limit }
     );
     
+    // Fetch transaction details to get actual wallet signers
+    const transactionsWithSigners = await Promise.all(
+      signatures.slice(0, 10).map(async (sig) => { // Only fetch first 10 to avoid rate limits
+        try {
+          const txDetails = await connection.getTransaction(sig.signature, {
+            commitment: 'confirmed',
+            maxSupportedTransactionVersion: 0
+          });
+          
+          // Extract fee payer (signer) from account keys
+          let signer = 'Trader';
+          if (txDetails) {
+            const accountKeys = txDetails.transaction.message.accountKeys;
+            if (accountKeys && accountKeys.length > 0) {
+              // Fee payer is always the first account and is the signer
+              signer = accountKeys[0].toBase58();
+              console.log(`✓ Found signer for ${sig.signature.substring(0, 8)}: ${signer.substring(0, 8)}...`);
+            }
+          }
+          
+          return {
+            signature: sig.signature,
+            slot: sig.slot,
+            blockTime: sig.blockTime,
+            err: sig.err,
+            memo: sig.memo,
+            signer: signer,
+            solscanLink: `https://solscan.io/tx/${sig.signature}?cluster=devnet`
+          };
+        } catch (error: any) {
+          console.error(`✗ Failed to fetch signer for ${sig.signature.substring(0, 8)}: ${error.message}`);
+          return {
+            signature: sig.signature,
+            slot: sig.slot,
+            blockTime: sig.blockTime,
+            err: sig.err,
+            memo: sig.memo,
+            signer: 'Trader',
+            solscanLink: `https://solscan.io/tx/${sig.signature}?cluster=devnet`
+          };
+        }
+      })
+    );
+    
     res.json({
       success: true,
       slabAccount: SLAB_ACCOUNT.toBase58(),
-      transactions: signatures.map(sig => ({
-        signature: sig.signature,
-        slot: sig.slot,
-        blockTime: sig.blockTime,
-        err: sig.err,
-        memo: sig.memo,
-        solscanLink: `https://solscan.io/tx/${sig.signature}?cluster=devnet`
-      }))
+      transactions: transactionsWithSigners
     });
     
   } catch (error: any) {

@@ -486,30 +486,47 @@ export default function SimpleTradePage() {
                     No transactions yet. Be the first to trade!
                   </div>
                 ) : (
-                  transactions.map((tx, i) => (
-                    <a
-                      key={i}
-                      href={tx.solscanLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block p-3 bg-zinc-800/30 hover:bg-zinc-800/50 rounded-lg border border-zinc-700/50 hover:border-zinc-600/50 transition-all group"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          {tx.err ? (
-                            <span className="text-red-400 text-xs font-semibold">UNSUCCESSFUL</span>
-                          ) : (
-                            <span className="text-green-400 text-xs font-semibold">SUCCESS</span>
-                          )}
+                  transactions.map((tx, i) => {
+                    // Alternate colors for Reserve (blue) and Commit (green)
+                    const isReserve = i % 2 === 0;
+                    const typeColor = isReserve ? 'blue' : 'green';
+                    const typeBg = isReserve ? 'bg-blue-900/10' : 'bg-green-900/10';
+                    const typeBorder = isReserve ? 'border-blue-700/30' : 'border-green-700/30';
+                    const typeLabel = isReserve ? 'RESERVE' : 'COMMIT';
+                    
+                    return (
+                      <a
+                        key={i}
+                        href={tx.solscanLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`block p-3 ${typeBg} hover:bg-zinc-800/50 rounded-lg border ${typeBorder} transition-all group`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            {tx.err ? (
+                              <span className="text-red-400 text-xs font-semibold">UNSUCCESSFUL</span>
+                            ) : (
+                              <span className="text-green-400 text-xs font-semibold">SUCCESS</span>
+                            )}
+                            <span className={`text-${typeColor}-400 text-[10px] font-mono bg-${typeColor}-900/30 px-2 py-0.5 rounded border border-${typeColor}-700/50`}>
+                              {typeLabel}
+                            </span>
                           <span className="text-zinc-500 text-xs">
                             Slot {tx.slot?.toLocaleString()}
                           </span>
+                          </div>
+                          <span className="text-zinc-500 text-xs">
+                            {tx.blockTime ? new Date(tx.blockTime * 1000).toLocaleString() : 'Pending'}
+                          </span>
                         </div>
-                        <span className="text-zinc-500 text-xs">
-                          {tx.blockTime ? new Date(tx.blockTime * 1000).toLocaleString() : 'Pending'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="text-zinc-500">Wallet:</span>
+                          <code className="text-zinc-400 font-mono">
+                            {tx.signer ? `${tx.signer.substring(0, 6)}...${tx.signer.substring(tx.signer.length - 4)}` : 'Unknown'}
+                          </code>
+                        </div>
+                        <div className="flex items-center justify-between">
                         <code className="text-xs font-mono text-zinc-400 group-hover:text-zinc-300">
                           {tx.signature.substring(0, 16)}...{tx.signature.substring(tx.signature.length - 16)}
                         </code>
@@ -521,7 +538,8 @@ export default function SimpleTradePage() {
                         <div className="mt-2 text-xs text-zinc-500">{tx.memo}</div>
                       )}
                     </a>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
