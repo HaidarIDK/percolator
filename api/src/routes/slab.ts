@@ -171,11 +171,13 @@ slabRouter.get('/transactions', async (req, res) => {
           // Extract fee payer (signer) from account keys
           let signer = '';
           if (txDetails) {
-            const accountKeys = txDetails.transaction.message.accountKeys;
+            const accountKeys = txDetails.transaction.message.getAccountKeys();
             if (accountKeys && accountKeys.length > 0) {
               // Fee payer is always the first account and is the signer
-              signer = accountKeys[0].toBase58();
-              console.log(`✓ Found signer for ${sig.signature.substring(0, 8)}: ${signer.substring(0, 8)}...`);
+              signer = accountKeys.get(0)?.toBase58() || '';
+              if (signer) {
+                console.log(`✓ Found signer for ${sig.signature.substring(0, 8)}: ${signer.substring(0, 8)}...`);
+              }
             }
           }
           
