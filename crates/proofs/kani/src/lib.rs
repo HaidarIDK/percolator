@@ -38,3 +38,22 @@ pub mod liquidation;
 
 #[cfg(kani)]
 pub mod properties;
+
+// Additional proof modules
+#[cfg(kani)]
+pub mod adaptive_warmup;
+
+#[cfg(kani)]
+pub mod amm;
+
+#[cfg(kani)]
+pub mod liq_planner;
+
+#[cfg(kani)]
+pub mod pnl_vesting;
+
+#[cfg(kani)]
+pub mod portfolio;
+
+#[cfg(kani)]
+pub mod venue_isolation;

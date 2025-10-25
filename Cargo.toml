@@ -9,6 +9,7 @@ members = [
     "tests/integration",
     "tests/e2e",
     "keeper",
+    "crates/amm_model",
     "crates/model_safety",
     "crates/proofs/kani",
 ]
@@ -29,6 +30,7 @@ solana-program = "2.1"
 solana-program-test = "2.1"
 solana-sdk = "2.1"
 tokio = { version = "1", features = ["full"] }
+amm_model = { path = "crates/amm_model" }
 model_safety = { path = "crates/model_safety" }
 
 [profile.dev]
