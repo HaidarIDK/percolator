@@ -130,10 +130,15 @@ impl TestContext {
         let router_path = workspace_root.join("target/deploy/percolator_router.so");
         let oracle_path = workspace_root.join("target/deploy/percolator_oracle.so");
 
-        let slab_program_id = Self::deploy_program(&client, &payer, slab_path.to_str().unwrap())?;
-        let amm_program_id = Self::deploy_program(&client, &payer, amm_path.to_str().unwrap())?;
-        let router_program_id = Self::deploy_program(&client, &payer, router_path.to_str().unwrap())?;
-        let oracle_program_id = Self::deploy_program(&client, &payer, oracle_path.to_str().unwrap())?;
+        let slab_keypair_path = workspace_root.join("target/deploy/percolator_slab-keypair.json");
+        let amm_keypair_path = workspace_root.join("target/deploy/percolator_amm-keypair.json");
+        let router_keypair_path = workspace_root.join("target/deploy/percolator_router-keypair.json");
+        let oracle_keypair_path = workspace_root.join("target/deploy/percolator_oracle-keypair.json");
+
+        let slab_program_id = Self::deploy_program(&client, &payer, slab_path.to_str().unwrap(), slab_keypair_path.to_str().unwrap())?;
+        let amm_program_id = Self::deploy_program(&client, &payer, amm_path.to_str().unwrap(), amm_keypair_path.to_str().unwrap())?;
+        let router_program_id = Self::deploy_program(&client, &payer, router_path.to_str().unwrap(), router_keypair_path.to_str().unwrap())?;
+        let oracle_program_id = Self::deploy_program(&client, &payer, oracle_path.to_str().unwrap(), oracle_keypair_path.to_str().unwrap())?;
 
         println!("Programs deployed:");
         println!("  Slab:   {}", slab_program_id);
@@ -152,8 +157,8 @@ impl TestContext {
         })
     }
 
-    /// Deploy a program from .so file
-    fn deploy_program(_client: &RpcClient, payer: &Keypair, program_path: &str) -> Result<Pubkey> {
+    /// Deploy a program from .so file with specified program keypair
+    fn deploy_program(_client: &RpcClient, payer: &Keypair, program_path: &str, program_keypair_path: &str) -> Result<Pubkey> {
         println!("Deploying {}...", program_path);
 
         // Write payer keypair to temporary file
@@ -163,13 +168,15 @@ impl TestContext {
         fs::write(keypair_path, keypair_json)
             .context("Failed to write deployer keypair")?;
 
-        // Use solana program deploy command
+        // Use solana program deploy command with explicit program-id
         let solana_bin = find_solana_binary("solana")?;
         let output = Command::new(&solana_bin)
             .args(&[
                 "program", "deploy",
                 "--url", "http://localhost:8899",
                 "--keypair", keypair_path,
+                "--program-id", program_keypair_path,
+                "--upgrade-authority", keypair_path,
                 program_path
             ])
             .output()
@@ -188,7 +195,7 @@ impl TestContext {
         // Parse program ID from output
         let output_str = String::from_utf8_lossy(&output.stdout);
         for line in output_str.lines() {
-            if line.contains("Program Id:") {
+            if line.contains("Program Id:") || line.contains("Program ID:") {
                 if let Some(id_str) = line.split_whitespace().last() {
                     return id_str.parse().context("Failed to parse program ID");
                 }

@@ -115,15 +115,11 @@ function LightweightChart({ coinId, timeframe, onPriceUpdate }: { coinId: "ether
   useEffect(() => {
     if (!chartContainerRef.current) return;
   
-    // Cleanup existing chart if any
-    if (chartRef.current) {
-      chartRef.current.remove();
-      chartRef.current = null;
-      seriesRef.current = null;
-    }
+    let isComponentMounted = true;
+    let cleanupFunctions: (() => void)[] = [];
   
     const timeoutId = setTimeout(async () => {
-      if (!chartContainerRef.current) return;
+      if (!chartContainerRef.current || !isComponentMounted) return;
   
       const chart = createChart(chartContainerRef.current, {
         layout: {
@@ -334,17 +330,22 @@ function LightweightChart({ coinId, timeframe, onPriceUpdate }: { coinId: "ether
       };
   
       const handleResize = () => {
-        if (chartContainerRef.current && chart) {
-          chart.applyOptions({
-            width: chartContainerRef.current.clientWidth,
-            height: chartContainerRef.current.clientHeight,
-          });
+        if (chartContainerRef.current && isComponentMounted) {
+          try {
+            chart.applyOptions({
+              width: chartContainerRef.current.clientWidth,
+              height: chartContainerRef.current.clientHeight,
+            });
+          } catch (e) {
+            // Chart might be disposed, ignore
+          }
         }
       };
       window.addEventListener("resize", handleResize);
+      cleanupFunctions.push(() => window.removeEventListener("resize", handleResize));
 
       const handleVisibleRangeChange = (timeRange: IRange<Time> | null) => {
-        if (!shouldLoadMoreData(timeRange, oldestTimestamp)) return;
+        if (!shouldLoadMoreData(timeRange, oldestTimestamp) || !isComponentMounted) return;
         
         console.log("🔄 User scrolled to beginning, loading more historical data");
         if (oldestTimestamp) {
@@ -353,20 +354,39 @@ function LightweightChart({ coinId, timeframe, onPriceUpdate }: { coinId: "ether
       };
       
       chart.timeScale().subscribeVisibleTimeRangeChange(handleVisibleRangeChange);
-  
-      return () => {
-        window.removeEventListener("resize", handleResize);
-        chart.timeScale().unsubscribeVisibleTimeRangeChange(handleVisibleRangeChange);
-        ws.close();
-        chart.remove();
-      };
+      cleanupFunctions.push(() => {
+        try {
+          chart.timeScale().unsubscribeVisibleTimeRangeChange(handleVisibleRangeChange);
+        } catch (e) {
+          // Chart might be disposed, ignore
+        }
+      });
+      
+      cleanupFunctions.push(() => ws.close());
     }, 100);
   
     return () => {
+      isComponentMounted = false;
       clearTimeout(timeoutId);
-      if (wsCleanupRef.current) wsCleanupRef.current();
+      
+      // Run all cleanup functions
+      cleanupFunctions.forEach(cleanup => cleanup());
+      
+      if (wsCleanupRef.current) {
+        try {
+          wsCleanupRef.current();
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      }
+      
+      // Remove chart last, after all event listeners are cleaned up
       if (chartRef.current) {
-        chartRef.current.remove();
+        try {
+          chartRef.current.remove();
+        } catch (e) {
+          // Chart might already be disposed, ignore
+        }
         chartRef.current = null;
         seriesRef.current = null;
       }
@@ -533,7 +553,7 @@ const TradingViewChartComponent = ({
 
   // Function to generate coin-specific mock data
   const generateCoinSpecificMockData = (basePrice: number, count: number) => {
-    const data: Array<{ time: number; open: number; high: number; low: number; close: number }> = [];
+    const data: Array<{ time: number; open: number; high: number; low: number; close: number; volume: number }> = [];
     let price = basePrice;
     const baseTime = new Date('2024-01-01').getTime();
 
@@ -572,7 +592,7 @@ const TradingViewChartComponent = ({
     // Try to connect to real WebSocket
     const cleanup = apiClient.connectWebSocket((data: unknown) => {
       const typedData = data as { type?: string; symbol?: string; price?: number; change?: number };
-      if (typedData.type === 'price_update' && typedData.symbol === symbol) {
+      if (typedData.type === 'price_update' && typedData.symbol === symbol && typedData.price !== undefined) {
         const newPrice = typedData.price;
         const change = typedData.change || 0;
         
@@ -645,8 +665,8 @@ const TradingViewChartComponent = ({
         if (data.length > 0) {
           const latest = data[data.length - 1] as { open: number; high: number; low: number; close: number }
           const first = data[0] as { open: number; high: number; low: number; close: number }
-          const high = Math.max(...data.map((d) => d.high))
-          const low = Math.min(...data.map((d) => d.low))
+          const high = Math.max(...data.map((d: any) => d.high))
+          const low = Math.min(...data.map((d: any) => d.low))
           const change = latest.close - first.open
           
           setOhlcData({
@@ -709,7 +729,14 @@ const TradingViewChartComponent = ({
         const cleanup = apiClient.onServerMessage((message: unknown) => {
           const typedMessage = message as { type?: string; symbol?: string; data?: unknown };
           if (typedMessage.type === 'candle' && typedMessage.symbol === 'SOL') {
-            const candleData = typedMessage.data;
+            const candleData = typedMessage.data as {
+              time: number;
+              open: number;
+              high: number;
+              low: number;
+              close: number;
+              volume: number;
+            };
             
             // Convert to our chart data format
             const chartCandle = {
@@ -1349,7 +1376,22 @@ const CrossSlabTrader = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin
   const [submitting, setSubmitting] = useState(false);
   const [slabQuotes, setSlabQuotes] = useState<any[]>([]);
   const [selectedSlabs, setSelectedSlabs] = useState<number[]>([]);
-  const [executionPlan, setExecutionPlan] = useState<{ slabs: Array<{ slabId: string; fillAmount: number; price: number; slabName?: string; quantity?: number; cost?: number }>; totalCost: number; totalFees: number; estimatedSlippage: number; totalQuantity?: number; avgPrice?: number; unfilled?: number } | null>(null);
+  const [executionPlan, setExecutionPlan] = useState<{ 
+    slabs: Array<{ 
+      slabId: string; 
+      fillAmount: number; 
+      price: number; 
+      slabName?: string; 
+      quantity?: number; 
+      cost?: number;
+    }>; 
+    totalCost: number; 
+    totalFees: number; 
+    estimatedSlippage: number; 
+    totalQuantity?: number; 
+    avgPrice?: number; 
+    unfilled?: number;
+  } | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(true); // Show details by default
   const [showCrossSlabInfo, setShowCrossSlabInfo] = useState(false);
   const [deploymentVersion, setDeploymentVersion] = useState<"v0" | "v1">("v0");
@@ -1446,7 +1488,14 @@ const CrossSlabTrader = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin
 
     // Select best slabs within price limit
     let remaining = qty;
-    const plan: Array<{ slabId: string; fillAmount: number; price: number }> = [];
+    const plan: Array<{ 
+      slabId: string; 
+      fillAmount: number; 
+      price: number; 
+      slabName?: string; 
+      quantity?: number; 
+      cost?: number;
+    }> = [];
     let totalCost = 0;
     let totalFees = 0;
 
@@ -1467,11 +1516,11 @@ const CrossSlabTrader = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin
       
       plan.push({
         slabId: slab.id,
+        fillAmount: qtyFromSlab,
+        price: slab.vwap,
         slabName: slab.name,
         quantity: qtyFromSlab,
-        price: slab.vwap,
-        cost: cost,
-        fee: fee
+        cost: cost
       });
 
       remaining -= qtyFromSlab;
@@ -1482,11 +1531,14 @@ const CrossSlabTrader = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin
     const filledQty = qty - remaining;
     const avgPrice = filledQty > 0 ? totalCost / filledQty : 0;
     const totalWithFees = totalCost + totalFees;
+    const estimatedSlippage = 0; // Calculate slippage if needed
 
     setExecutionPlan({
       slabs: plan,
       totalQuantity: filledQty,
       totalCost: totalWithFees,
+      totalFees: totalFees,
+      estimatedSlippage: estimatedSlippage,
       avgPrice: avgPrice,
       unfilled: Math.max(0, remaining)
     });
@@ -1507,7 +1559,7 @@ const CrossSlabTrader = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin
       return;
     }
 
-    if (!executionPlan || executionPlan.unfilled > 0) {
+    if (!executionPlan || (executionPlan.unfilled && executionPlan.unfilled > 0)) {
       alert('Not enough liquidity across slabs');
       return;
     }
@@ -1573,7 +1625,7 @@ const CrossSlabTrader = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin
       console.log('✅ STEP 6: Portfolio updated with net exposure');
       console.log(`Transaction: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
       
-      alert(`✅ Cross-Slab Execution Complete!\n\nFilled: ${executionPlan.totalQuantity} ${getBaseCurrency()}\nAvg Price: ${executionPlan.avgPrice.toFixed(2)} ${getQuoteCurrency()}\nSlabs used: ${executionPlan.slabs.length}\n\nSignature: ${signature.substring(0, 20)}...`);
+      alert(`✅ Cross-Slab Execution Complete!\n\nFilled: ${executionPlan.totalQuantity} ${getBaseCurrency()}\nAvg Price: ${executionPlan.avgPrice?.toFixed(2) || 'N/A'} ${getQuoteCurrency()}\nSlabs used: ${executionPlan.slabs.length}\n\nSignature: ${signature.substring(0, 20)}...`);
       
       // Reset form
       setQuantity("");
@@ -1584,12 +1636,13 @@ const CrossSlabTrader = ({ selectedCoin }: { selectedCoin: "ethereum" | "bitcoin
       console.error('❌ Cross-slab execution error:', error);
       
       // Handle specific errors
-      if (error.message?.includes('User rejected')) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('User rejected')) {
         alert('Transaction cancelled');
-      } else if (error.message?.includes('simulation failed')) {
+      } else if (errorMessage.includes('simulation failed')) {
         alert('⚠️ Transaction simulation failed (normal on testnet)\n\nThe flow works but programs need initialization.');
       } else {
-        alert(`Execution failed: ${error.message || 'Unknown error'}`);
+        alert(`Execution failed: ${errorMessage || 'Unknown error'}`);
       }
     } finally {
       setSubmitting(false);
@@ -2195,7 +2248,7 @@ Margin calculation on NET exposure:
 
             {/* Slab breakdown */}
             <div className="space-y-2">
-              {executionPlan.slabs.map((slab: { slabId: string; fillAmount: number; price: number; slabName?: string }, idx: number) => (
+              {executionPlan.slabs.map((slab: { slabId: string; fillAmount: number; price: number; slabName?: string; cost?: number }, idx: number) => (
                 <div key={idx} className="bg-black/30 rounded-lg p-2 text-xs">
                   <div className="flex justify-between mb-1">
                     <span className="text-gray-300">{slab.slabName}</span>
@@ -2203,7 +2256,7 @@ Margin calculation on NET exposure:
                   </div>
                   <div className="flex justify-between text-gray-500">
                     <span>@ ${slab.price.toFixed(2)}</span>
-                    <span>${slab.cost.toFixed(2)}</span>
+                    <span>${(slab.cost || 0).toFixed(2)}</span>
                   </div>
                 </div>
               ))}
@@ -2217,7 +2270,7 @@ Margin calculation on NET exposure:
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-400">Avg Price:</span>
-                <span className="text-white font-semibold">${executionPlan.avgPrice.toFixed(2)}</span>
+                <span className="text-white font-semibold">${(executionPlan.avgPrice || 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-base font-bold pt-1 border-t border-purple-500/20">
                 <span className={tradeSide === "buy" ? "text-purple-300" : "text-green-300"}>
@@ -2227,17 +2280,17 @@ Margin calculation on NET exposure:
                   ${executionPlan.totalCost.toFixed(2)}
                 </span>
               </div>
-              {executionPlan.unfilled > 0 && (
+              {(executionPlan.unfilled && executionPlan.unfilled > 0) && (
                 <div className="text-xs text-yellow-400 mt-2">
                   ⚠️ {executionPlan.unfilled.toFixed(2)} {getBaseCurrency()} unfilled
-                  {executionPlan.totalQuantity === 0 && tradeSide === "sell" && (
+                  {(executionPlan.totalQuantity || 0) === 0 && tradeSide === "sell" && (
                     <div className="text-xs text-orange-400 mt-1">
                       💡 Slabs are offering ${availableSlabs[0]?.vwap.toFixed(2) || 0}, but your minimum is ${limitPrice}
                       <br />
                       Lower your limit price to ${(availableSlabs[0]?.vwap * 0.99).toFixed(2)} or less to fill
                     </div>
                   )}
-                  {executionPlan.totalQuantity === 0 && tradeSide === "buy" && (
+                  {(executionPlan.totalQuantity || 0) === 0 && tradeSide === "buy" && (
                     <div className="text-xs text-orange-400 mt-1">
                       💡 Slabs are asking ${availableSlabs[0]?.vwap.toFixed(2) || 0}, but your max is ${limitPrice}
                       <br />
@@ -2246,7 +2299,7 @@ Margin calculation on NET exposure:
                   )}
                 </div>
               )}
-              {tradeSide === "sell" && executionPlan.totalQuantity > 0 && (
+              {tradeSide === "sell" && (executionPlan.totalQuantity || 0) > 0 && (
                 <div className="text-xs text-green-400/70 mt-2">
                   💰 You will receive ${executionPlan.totalCost.toFixed(2)} USDC
                 </div>
@@ -2258,13 +2311,13 @@ Margin calculation on NET exposure:
         {/* Execute Button */}
         <button
           onClick={handleExecuteCrossSlab}
-          disabled={!connected || submitting || !executionPlan || executionPlan.unfilled > 0}
+          disabled={!connected || submitting || !executionPlan || Boolean(executionPlan.unfilled && executionPlan.unfilled > 0)}
           className={cn(
             "w-full py-4 rounded-xl font-bold text-base transition-all duration-300 shadow-xl",
             tradeSide === "buy"
               ? "bg-gradient-to-r from-[#B8B8FF]/40 to-[#B8B8FF]/30 hover:from-[#B8B8FF]/50 hover:to-[#B8B8FF]/40 border border-[#B8B8FF]/60 text-[#B8B8FF] hover:shadow-[#B8B8FF]/30"
               : "bg-gradient-to-r from-red-500/40 to-red-400/30 hover:from-red-500/50 hover:to-red-400/40 border border-red-500/60 text-red-300 hover:shadow-red-500/30",
-            (!connected || submitting || !executionPlan || executionPlan.unfilled > 0) && "opacity-50 cursor-not-allowed"
+            (!connected || submitting || !executionPlan || (executionPlan.unfilled && executionPlan.unfilled > 0)) && "opacity-50 cursor-not-allowed"
           )}
         >
           {submitting ? (
@@ -2276,7 +2329,7 @@ Margin calculation on NET exposure:
             "Connect Wallet"
           ) : !executionPlan ? (
             "Enter Quantity & Price"
-          ) : executionPlan.unfilled > 0 ? (
+          ) : (executionPlan.unfilled && executionPlan.unfilled > 0) ? (
             "Insufficient Liquidity"
           ) : (
             <span className="flex items-center justify-center gap-2">
@@ -2566,9 +2619,10 @@ const OrderForm = ({ selectedCoin, chartCurrentPrice }: { selectedCoin: "ethereu
             
           } catch (txError: unknown) {
             // Silent error handling for clean console
+            const txErrorMsg = txError instanceof Error ? txError.message : String(txError);
             
             // Graceful fallback - still works for demo!
-            if (txError.message?.includes('simulation failed') || txError.message?.includes('0x')) {
+            if (txErrorMsg.includes('simulation failed') || txErrorMsg.includes('0x')) {
               // Silent fallback - show success to user
               setLastHoldId(reserveResult.holdId);
               setSide("Commit");
@@ -2583,9 +2637,9 @@ const OrderForm = ({ selectedCoin, chartCurrentPrice }: { selectedCoin: "ethereu
             }
             
             // Only show error for real failures (user rejection, insufficient balance)
-            if (txError.message?.includes('User rejected')) {
+            if (txErrorMsg.includes('User rejected')) {
               showToast('❌ You cancelled the transaction', 'error');
-            } else if (txError.message?.includes('insufficient')) {
+            } else if (txErrorMsg.includes('insufficient')) {
               showToast('❌ Insufficient SOL for fees\n\nGet more from faucet', 'error');
             } else {
               showToast('Transaction failed', 'error');
@@ -2663,9 +2717,10 @@ const OrderForm = ({ selectedCoin, chartCurrentPrice }: { selectedCoin: "ethereu
             
           } catch (txError: unknown) {
             // Silent error handling for clean console
+            const txErrorMsg = txError instanceof Error ? txError.message : String(txError);
             
             // Graceful success even if blockchain simulation fails
-            if (txError.message?.includes('simulation failed') || txError.message?.includes('0x')) {
+            if (txErrorMsg.includes('simulation failed') || txErrorMsg.includes('0x')) {
               // Silent success
               showToast(
                 `🎉 Trade Executed!\n\nSide: ${tradeSide.toUpperCase()}\nFilled: ${quantity} ${getBaseCurrency()}\nPrice: ${price} ${getQuoteCurrency()}\nTotal: ${(parseFloat(quantity) * parseFloat(price)).toFixed(2)} ${getQuoteCurrency()}`,
@@ -2680,9 +2735,9 @@ const OrderForm = ({ selectedCoin, chartCurrentPrice }: { selectedCoin: "ethereu
             }
             
             // Only show error for real user failures
-            if (txError.message?.includes('User rejected')) {
+            if (txErrorMsg.includes('User rejected')) {
               showToast('❌ You cancelled the transaction', 'error');
-            } else if (txError.message?.includes('insufficient')) {
+            } else if (txErrorMsg.includes('insufficient')) {
               showToast('❌ Insufficient SOL for fees', 'error');
             } else {
               showToast('Transaction failed', 'error');

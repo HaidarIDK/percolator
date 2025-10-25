@@ -64,7 +64,7 @@ async fn run_all_e2e_tests() {
     println!("\n━━━ Track 2: Happy-Path Trading ━━━");
 
     match test_trading::test_t10_atomic_multi_slab_buy(&ctx).await {
-        Ok(_) => skipped += 1,
+        Ok(_) => passed += 1,
         Err(e) => {
             eprintln!("❌ T-10 FAILED: {}", e);
             failed += 1;
